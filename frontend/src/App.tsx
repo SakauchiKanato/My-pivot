@@ -1,16 +1,19 @@
 /**
  * My Pivot メイン画面
  *
- * 左に五里霧中モード（入力）、右にタイムライン（参照）を並べる。
- * これが「入力 → 整理 → タイムライン」の1ループを1画面で見せる構成。
+ * 未ログイン → <LoginPage> を表示
+ * ログイン済 → 左に五里霧中モード（入力）、右にタイムライン（参照）を並べる。
  */
 import { useEffect, useState } from "react";
 import { fetchPivots, type Pivot } from "./lib/api";
+import { getAuthUser, logout, type AuthUser } from "./lib/auth";
 import { Timeline } from "./components/Timeline";
 import { FogMode } from "./components/FogMode";
+import { LoginPage } from "./components/LoginPage";
 import "./App.css";
 
 export default function App() {
+  const [user, setUser] = useState<AuthUser | null>(getAuthUser());
   const [pivots, setPivots] = useState<Pivot[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -28,14 +31,37 @@ export default function App() {
   };
 
   useEffect(() => {
-    load();
-  }, []);
+    if (user) load();
+  }, [user]);
+
+  const handleLogin = () => {
+    setUser(getAuthUser());
+  };
+
+  const handleLogout = () => {
+    logout();
+    setUser(null);
+    setPivots([]);
+  };
+
+  // 未ログイン時はログイン画面を表示
+  if (!user) {
+    return <LoginPage onSuccess={handleLogin} />;
+  }
 
   return (
     <div className="app">
       <header className="app-header">
-        <h1>My Pivot</h1>
-        <p className="tagline">迷った数だけ、私は進んだ。</p>
+        <div className="header-left">
+          <h1>My Pivot</h1>
+          <p className="tagline">迷った数だけ、私は進んだ。</p>
+        </div>
+        <div className="header-right">
+          <span className="header-username">👤 {user.username}</span>
+          <button className="logout-btn" onClick={handleLogout}>
+            ログアウト
+          </button>
+        </div>
       </header>
 
       <div className="app-body">

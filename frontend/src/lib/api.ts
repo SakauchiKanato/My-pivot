@@ -3,10 +3,23 @@
  *
  * ここを1箇所にまとめておくことで、
  * APIのURLが変わっても各コンポーネントを直さずに済む。
+ * 全リクエストに Authorization: Bearer <token> を付与する。
  */
+
+import { getToken } from "./auth";
 
 // バックエンドのベースURL（開発中はlocalhost）
 const API_BASE = "http://localhost:8000";
+
+// --- 共通ヘッダー生成 ---
+function authHeaders(extra?: Record<string, string>): Record<string, string> {
+  const token = getToken();
+  return {
+    "Content-Type": "application/json",
+    ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    ...extra,
+  };
+}
 
 // --- 型定義（バックエンドのモデルと対応） ---
 export type Flag = "success" | "regret" | null;
@@ -38,7 +51,9 @@ export interface PivotCreate {
 
 /** タイムライン用に全ピボットを取得 */
 export async function fetchPivots(): Promise<Pivot[]> {
-  const res = await fetch(`${API_BASE}/api/pivots`);
+  const res = await fetch(`${API_BASE}/api/pivots`, {
+    headers: authHeaders(),
+  });
   if (!res.ok) throw new Error("ピボットの取得に失敗しました");
   return res.json();
 }
@@ -47,7 +62,7 @@ export async function fetchPivots(): Promise<Pivot[]> {
 export async function createPivot(data: PivotCreate): Promise<Pivot> {
   const res = await fetch(`${API_BASE}/api/pivots`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: authHeaders(),
     body: JSON.stringify(data),
   });
   if (!res.ok) throw new Error("ピボットの作成に失敗しました");
@@ -58,7 +73,7 @@ export async function createPivot(data: PivotCreate): Promise<Pivot> {
 export async function updateFlag(id: number, flag: Flag): Promise<Pivot> {
   const res = await fetch(`${API_BASE}/api/pivots/${id}`, {
     method: "PATCH",
-    headers: { "Content-Type": "application/json" },
+    headers: authHeaders(),
     body: JSON.stringify({ flag }),
   });
   if (!res.ok) throw new Error("評価の更新に失敗しました");
