@@ -31,8 +31,9 @@ app = FastAPI(title="My Pivot API", lifespan=lifespan)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
-        "http://localhost:5173",  # Vite のデフォルトポート
-        "http://localhost:3000",  # Next.js のデフォルトポート
+        "http://localhost:5173",  # Vite デフォルト
+        "http://localhost:5174",  # Vite 競合時の代替ポート
+        "http://localhost:3000",  # Next.js デフォルト
     ],
     allow_credentials=True,
     allow_methods=["*"],
