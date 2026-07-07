@@ -3,19 +3,25 @@
 
 実行方法：
     cd backend
-    python seed.py
+    PYTHONPATH=. python seed.py
 
 ※ ここのデータは仮のサンプル。
    本番デモでは「チームメンバー自身の実体験」に差し替えると、
    審査基準（山室先輩「好き・情熱が伝わるか」）への訴求が最大化される。
 """
+import os
+import sys
 from datetime import datetime
 
-from sqlmodel import Session
+# backend/ 直下から実行されたときのためにパスを通す
+sys.path.insert(0, os.path.abspath(os.path.dirname(__file__)))
+
+from sqlmodel import Session, select
 
 from app.database import engine, create_db_and_tables
-from app.models import Pivot, Tag, Layer, Flag
+from app.models import Pivot, Tag, Layer, Flag, User
 from app.services.tag_mapper import map_tag_to_category
+from app.auth import hash_password
 
 
 # (title, content, tags, flag, confidence, year, month)
@@ -41,7 +47,27 @@ SAMPLE_DATA = [
 def seed():
     create_db_and_tables()
     with Session(engine) as session:
+        # デモユーザーの作成（いなければ作成）
+        demo_user = session.exec(select(User).where(User.email == "demo@example.com")).first()
+        if not demo_user:
+            demo_user = User(
+                username="demo_user",
+                email="demo@example.com",
+                hashed_password=hash_password("password123"),
+            )
+            session.add(demo_user)
+            session.commit()
+            session.refresh(demo_user)
+            print("デモユーザー (demo@example.com / password123) を作成しました。")
+
         for title, content, tag_names, flag, conf, year, month in SAMPLE_DATA:
+            # 既存の重複登録を防ぐチェック
+            existing_pivot = session.exec(
+                select(Pivot).where(Pivot.title == title, Pivot.user_id == demo_user.id)
+            ).first()
+            if existing_pivot:
+                continue
+
             pivot = Pivot(
                 title=title,
                 content=content,
@@ -49,14 +75,21 @@ def seed():
                 flag=flag,
                 confidence=conf,
                 created_at=datetime(year, month, 1),
+                user_id=demo_user.id,
             )
             for name in tag_names:
                 category = map_tag_to_category(name)
-                pivot.tags.append(Tag(name=name, category=category))
+                # タグの重複再利用
+                existing_tag = session.exec(select(Tag).where(Tag.name == name)).first()
+                if existing_tag:
+                    pivot.tags.append(existing_tag)
+                else:
+                    pivot.tags.append(Tag(name=name, category=category))
             session.add(pivot)
         session.commit()
-    print(f"{len(SAMPLE_DATA)} 件のデモデータを投入しました。")
+    print(f"デモデータの投入が完了しました。")
 
 
 if __name__ == "__main__":
     seed()
+

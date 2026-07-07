@@ -14,7 +14,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.database import create_db_and_tables
-from app.routers import pivots
+from app.routers import pivots, users
 
 
 @asynccontextmanager
@@ -40,6 +40,7 @@ app.add_middleware(
 )
 
 # ルーターを登録
+app.include_router(users.router)
 app.include_router(pivots.router)
 
 
