@@ -1,32 +1,48 @@
-# pyrefly: ignore [missing-import]
+"""
+My Pivot バックエンド エントリーポイント
+
+起動方法：
+    cd backend
+    uvicorn app.main:app --reload
+
+起動後、http://localhost:8000/docs で
+自動生成されたAPIドキュメント（Swagger UI）を確認できる。
+"""
+from contextlib import asynccontextmanager
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from contextlib import asynccontextmanager
 
 from app.database import create_db_and_tables
 from app.routers import pivots
 
-# アプリ起動時にDBとテーブルを自動作成
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    # 起動時にDBテーブルを作成
     create_db_and_tables()
     yield
 
-app = FastAPI(
-    title="My Pivot API",
-    description="迷った数だけ、私は進んだ。過去の選択・迷いを記録するアプリのバックエンドAPI。",
-    version="0.1.0",
-    lifespan=lifespan,
-)
 
-# CORS設定（フロントエンド http://localhost:5173 からのアクセスを許可）
+app = FastAPI(title="My Pivot API", lifespan=lifespan)
+
+# フロント（React）からのアクセスを許可する（CORS設定）
+# 開発中は localhost の各ポートを許可
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173"],
+    allow_origins=[
+        "http://localhost:5173",  # Vite のデフォルトポート
+        "http://localhost:3000",  # Next.js のデフォルトポート
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-# ルーターの登録
+# ルーターを登録
 app.include_router(pivots.router)
+
+
+@app.get("/")
+def root():
+    return {"message": "My Pivot API is running", "docs": "/docs"}

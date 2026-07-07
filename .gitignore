@@ -24,6 +24,9 @@ dist-ssr
 *.sw?
 
 # Backend (Python / SQLite)
+backend/my_pivot.db
+backend/__pycache__/
+backend/*.pyc
 backend/database.db
 **/__pycache__/
 *.pyc

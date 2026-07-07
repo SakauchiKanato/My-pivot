@@ -1,40 +1,64 @@
+"""
+データモデル定義
+
+My Pivot のデータ構造を定義する。
+- Pivot: 1つの選択・迷いの記録
+- Tag:   感情タグ（カテゴリ付き）
+
+過去の設計議論を反映：
+- confidence（当時の確信度）を flag（今の評価）と分離 → 後知恵バイアス対策
+- layer（3層アーキテクチャ）でビジョン/ピボット/ライフを区別
+"""
+from datetime import datetime
 from enum import Enum
 from typing import Optional, List
-from datetime import datetime
-# pyrefly: ignore [missing-import]
+
 from sqlmodel import SQLModel, Field, Relationship
 
+
 class Layer(str, Enum):
-    VISION = "VISION"
-    PIVOT = "PIVOT"
-    LIFE = "LIFE"
+    """3層アーキテクチャ：情報の肥大化を構造的に防ぐ"""
+    VISION = "vision"   # ビジョン（長期目標）
+    PIVOT = "pivot"     # ピボット（転換点）
+    LIFE = "life"       # ライフ（日常）
+
 
 class Flag(str, Enum):
-    SUCCESS = "SUCCESS"
-    REGRET = "REGRET"
+    """選択の評価（後から付与）"""
+    SUCCESS = "success"  # 成功
+    REGRET = "regret"    # 後悔
 
+
+# --- 中間テーブル（Pivot と Tag の多対多をつなぐ） ---
 class PivotTagLink(SQLModel, table=True):
-    __tablename__ = "pivot_tag_link"
-    pivot_id: Optional[int] = Field(default=None, foreign_key="pivot.id", primary_key=True)
-    tag_id: Optional[int] = Field(default=None, foreign_key="tag.id", primary_key=True)
+    pivot_id: Optional[int] = Field(
+        default=None, foreign_key="pivot.id", primary_key=True
+    )
+    tag_id: Optional[int] = Field(
+        default=None, foreign_key="tag.id", primary_key=True
+    )
 
-class Pivot(SQLModel, table=True):
-    id: Optional[int] = Field(default=None, primary_key=True)
-    title: str = Field(index=True)
-    content: str  # 悩み・本文
-    layer: Layer = Field(default=Layer.PIVOT)  # PIVOT/VISION/LIFE
-    flag: Optional[Flag] = Field(default=None)  # SUCCESS/REGRET
-    confidence: Optional[int] = Field(default=None)  # 確信度 (1-5)
-    image_url: Optional[str] = Field(default=None)
-    created_at: datetime = Field(default_factory=datetime.utcnow)
-
-    # Many-to-many relationship
-    tags: List["Tag"] = Relationship(back_populates="pivots", link_model=PivotTagLink)
 
 class Tag(SQLModel, table=True):
+    """感情タグ。name はユーザーが入力、category は自動付与される。"""
     id: Optional[int] = Field(default=None, primary_key=True)
-    name: str = Field(index=True, unique=True)  # 例: "#絶望"
-    category: str  # 例: "感情", "課題" など
+    name: str = Field(index=True)          # 例：#絶望
+    category: str                          # 変換後カテゴリ：感情
+    pivots: List["Pivot"] = Relationship(
+        back_populates="tags", link_model=PivotTagLink
+    )
 
-    # Many-to-many relationship
-    pivots: List["Pivot"] = Relationship(back_populates="tags", link_model=PivotTagLink)
+
+class Pivot(SQLModel, table=True):
+    """1つの選択・迷いの記録。"""
+    id: Optional[int] = Field(default=None, primary_key=True)
+    title: str                                      # タイトル（命名）
+    content: str                                    # 五里霧中の悩み（本文）
+    layer: Layer = Field(default=Layer.PIVOT)       # 3層
+    flag: Optional[Flag] = Field(default=None)      # 成功/後悔（今の評価）
+    confidence: Optional[int] = Field(default=None) # 当時の確信度 1-5
+    image_url: Optional[str] = Field(default=None)  # 添付画像
+    created_at: datetime = Field(default_factory=datetime.now)  # 「いつ」検索軸
+    tags: List[Tag] = Relationship(
+        back_populates="pivots", link_model=PivotTagLink
+    )
