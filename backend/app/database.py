@@ -4,10 +4,13 @@
 開発時は SQLite を使う（セットアップ不要・ファイル1つで完結）。
 本番でクラウドに載せる場合は DATABASE_URL を差し替えるだけでよい。
 """
+from pathlib import Path
 from sqlmodel import SQLModel, create_engine, Session
 
-# SQLite ファイル。backend/ 直下に my_pivot.db が作られる
-DATABASE_URL = "sqlite:///./my_pivot.db"
+# このファイル (database.py) の場所を基準に backend/my_pivot.db を固定
+# → どのディレクトリから uvicorn を起動してもパスがズレない
+_DB_PATH = Path(__file__).resolve().parent.parent / "my_pivot.db"
+DATABASE_URL = f"sqlite:///{_DB_PATH}"
 
 # check_same_thread=False は SQLite を FastAPI で使うための定番設定
 engine = create_engine(

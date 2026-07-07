@@ -2,6 +2,7 @@
 データモデル定義
 
 My Pivot のデータ構造を定義する。
+- User:  ユーザーアカウント（ログイン機能）
 - Pivot: 1つの選択・迷いの記録
 - Tag:   感情タグ（カテゴリ付き）
 
@@ -27,6 +28,19 @@ class Flag(str, Enum):
     """選択の評価（後から付与）"""
     SUCCESS = "success"  # 成功
     REGRET = "regret"    # 後悔
+
+
+# --- ユーザーモデル ---
+class User(SQLModel, table=True):
+    """ログインユーザー。"""
+    id: Optional[int] = Field(default=None, primary_key=True)
+    username: str = Field(unique=True, index=True)
+    email: str = Field(unique=True, index=True)
+    hashed_password: str
+    created_at: datetime = Field(default_factory=datetime.now)
+
+    # リレーション：ユーザーが持つピボット一覧
+    pivots: List["Pivot"] = Relationship(back_populates="user")
 
 
 # --- 中間テーブル（Pivot と Tag の多対多をつなぐ） ---
@@ -59,6 +73,11 @@ class Pivot(SQLModel, table=True):
     confidence: Optional[int] = Field(default=None) # 当時の確信度 1-5
     image_url: Optional[str] = Field(default=None)  # 添付画像
     created_at: datetime = Field(default_factory=datetime.now)  # 「いつ」検索軸
+
+    # ユーザーとの紐付け（外部キー）
+    user_id: Optional[int] = Field(default=None, foreign_key="user.id", index=True)
+    user: Optional[User] = Relationship(back_populates="pivots")
+
     tags: List[Tag] = Relationship(
         back_populates="pivots", link_model=PivotTagLink
     )

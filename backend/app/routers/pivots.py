@@ -1,12 +1,12 @@
 """
 ピボット関連のAPI
 
-エンドポイント：
+エンドポイント（全て要ログイン）：
 - POST   /api/pivots        新規作成（タグ整理も実行）
-- GET    /api/pivots        一覧取得（タイムライン用）
+- GET    /api/pivots        一覧取得（タイムライン用・自分のものだけ）
+- GET    /api/pivots/search 3軸検索（自分のものだけ）
 - GET    /api/pivots/{id}   個別取得
 - PATCH  /api/pivots/{id}   評価(flag)の更新
-- GET    /api/pivots/search 3軸検索
 """
 from datetime import datetime
 from typing import Optional, List
@@ -16,8 +16,9 @@ from sqlmodel import Session, select
 from pydantic import BaseModel
 
 from app.database import get_session
-from app.models import Pivot, Tag, Layer, Flag
+from app.models import Pivot, Tag, Layer, Flag, User
 from app.services.tag_mapper import map_tag_to_category
+from app.auth import get_current_user
 
 router = APIRouter(prefix="/api/pivots", tags=["pivots"])
 
@@ -35,14 +36,33 @@ class FlagUpdate(BaseModel):
     flag: Flag
 
 
+def _serialize_pivot(p: Pivot) -> dict:
+    """Pivot オブジェクトをレスポンス用の dict に変換する。tags を確実に含める。"""
+    return {
+        "id": p.id,
+        "title": p.title,
+        "content": p.content,
+        "layer": p.layer,
+        "flag": p.flag,
+        "confidence": p.confidence,
+        "created_at": p.created_at,
+        "tags": [{"name": t.name, "category": t.category} for t in p.tags],
+    }
+
+
 # --- 新規作成 ---
 @router.post("")
-def create_pivot(data: PivotCreate, session: Session = Depends(get_session)):
+def create_pivot(
+    data: PivotCreate,
+    session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user),
+):
     pivot = Pivot(
         title=data.title,
         content=data.content,
         layer=data.layer,
         confidence=data.confidence,
+        user_id=current_user.id,
     )
     # 先にpivotをsessionに登録してからタグをひもづける
     # （順序を守らないとSQLAlchemyがタグ追加を無視する）
@@ -60,34 +80,33 @@ def create_pivot(data: PivotCreate, session: Session = Depends(get_session)):
 
     session.commit()
     session.refresh(pivot)
-    # tags を明示的に読み込んでレスポンスに含める
-    return {
-        "id": pivot.id,
-        "title": pivot.title,
-        "content": pivot.content,
-        "layer": pivot.layer,
-        "flag": pivot.flag,
-        "confidence": pivot.confidence,
-        "created_at": pivot.created_at,
-        "tags": [{"name": t.name, "category": t.category} for t in pivot.tags],
-    }
+    return _serialize_pivot(pivot)
 
 
-# --- 一覧取得（新しい順） ---
+# --- 一覧取得（自分のピボットのみ・新しい順） ---
 @router.get("")
-def list_pivots(session: Session = Depends(get_session)):
-    pivots = session.exec(select(Pivot).order_by(Pivot.created_at)).all()
-    return pivots
+def list_pivots(
+    session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user),
+):
+    pivots = session.exec(
+        select(Pivot)
+        .where(Pivot.user_id == current_user.id)
+        .order_by(Pivot.created_at)
+    ).all()
+    # tags は lazy load なので明示的にシリアライズして返す
+    return [_serialize_pivot(p) for p in pivots]
 
 
-# --- 3軸検索（いつ・意味・タグ） ---
+# --- 3軸検索（自分のものだけ・いつ・意味・タグ） ---
 @router.get("/search")
 def search_pivots(
     keyword: Optional[str] = Query(None, description="意味（タイトル）検索"),
     category: Optional[str] = Query(None, description="種類（タグカテゴリ）"),
     session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user),
 ):
-    stmt = select(Pivot)
+    stmt = select(Pivot).where(Pivot.user_id == current_user.id)
     if keyword:
         stmt = stmt.where(Pivot.title.contains(keyword))
     pivots = session.exec(stmt).all()
@@ -98,16 +117,23 @@ def search_pivots(
             p for p in pivots
             if any(t.category == category for t in p.tags)
         ]
-    return pivots
+    return [_serialize_pivot(p) for p in pivots]
 
 
 # --- 個別取得 ---
 @router.get("/{pivot_id}")
-def get_pivot(pivot_id: int, session: Session = Depends(get_session)):
+def get_pivot(
+    pivot_id: int,
+    session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user),
+):
     pivot = session.get(Pivot, pivot_id)
     if not pivot:
         raise HTTPException(status_code=404, detail="Pivot not found")
-    return pivot
+    # 他のユーザーのピボットは見えない
+    if pivot.user_id != current_user.id:
+        raise HTTPException(status_code=403, detail="アクセスが許可されていません")
+    return _serialize_pivot(pivot)
 
 
 # --- 評価の更新（成功/後悔フラグ） ---
@@ -116,12 +142,15 @@ def update_flag(
     pivot_id: int,
     data: FlagUpdate,
     session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user),
 ):
     pivot = session.get(Pivot, pivot_id)
     if not pivot:
         raise HTTPException(status_code=404, detail="Pivot not found")
+    if pivot.user_id != current_user.id:
+        raise HTTPException(status_code=403, detail="アクセスが許可されていません")
     pivot.flag = data.flag
     session.add(pivot)
     session.commit()
     session.refresh(pivot)
-    return pivot
+    return _serialize_pivot(pivot)

@@ -46,3 +46,8 @@ backend/app/__pycache__/main.cpython-312.pyc
 backend/app/__pycache__/models.cpython-312.pyc
 backend/app/routers/__pycache__/pivots.cpython-312.pyc
 backend/app/services/__pycache__/tag_mapper.cpython-312.pyc
+backend/app/__pycache__/database.cpython-312.pyc
+backend/app/__pycache__/main.cpython-312.pyc
+backend/app/__pycache__/models.cpython-312.pyc
+backend/app/routers/__pycache__/pivots.cpython-312.pyc
+backend/app/services/__pycache__/tag_mapper.cpython-312.pyc
