@@ -1,0 +1,302 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>My Pivot — 開発・動作共有ガイド</title>
+  <style>
+    :root {
+      --primary: #6556b3;
+      --secondary: #b88a36;
+      --bg: #f8f9fa;
+      --text: #2d3748;
+      --light-bg: #fff;
+      --border: #e2e8f0;
+      --code-bg: #f1f5f9;
+      --success: #2f6f58;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Hiragino Kaku Gothic ProN", Meiryo, sans-serif;
+      line-height: 1.7;
+      color: var(--text);
+      background-color: var(--bg);
+      margin: 0;
+      padding: 40px 20px;
+    }
+
+    .container {
+      max-width: 850px;
+      margin: 0 auto;
+      background: var(--light-bg);
+      padding: 40px 50px;
+      border-radius: 12px;
+      box-shadow: 0 10px 25px rgba(0, 0, 0, 0.05);
+    }
+
+    header {
+      border-bottom: 2px solid var(--primary);
+      padding-bottom: 20px;
+      margin-bottom: 30px;
+      text-align: center;
+    }
+
+    h1 {
+      color: var(--primary);
+      margin: 0 0 10px 0;
+      font-size: 32px;
+      font-weight: 700;
+    }
+
+    .subtitle {
+      color: #718096;
+      font-size: 16px;
+      margin: 0;
+    }
+
+    h2 {
+      color: var(--primary);
+      border-left: 5px solid var(--secondary);
+      padding-left: 12px;
+      margin-top: 40px;
+      margin-bottom: 20px;
+      font-size: 22px;
+    }
+
+    h3 {
+      font-size: 18px;
+      color: #4a5568;
+      margin-top: 24px;
+    }
+
+    ul, ol {
+      padding-left: 20px;
+    }
+
+    li {
+      margin-bottom: 8px;
+    }
+
+    code {
+      font-family: source-code-pro, Menlo, Monaco, Consolas, "Courier New", monospace;
+      background-color: var(--code-bg);
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-size: 0.9em;
+      color: #d53f8c;
+    }
+
+    pre {
+      background-color: #1a202c;
+      color: #edf2f7;
+      padding: 16px;
+      border-radius: 8px;
+      overflow-x: auto;
+      margin: 12px 0;
+    }
+
+    pre code {
+      background-color: transparent;
+      padding: 0;
+      color: inherit;
+      font-size: 0.95em;
+    }
+
+    .card {
+      background: #f7fafc;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 20px;
+      margin: 20px 0;
+    }
+
+    .badge-container {
+      display: flex;
+      gap: 10px;
+      margin-bottom: 12px;
+    }
+
+    .badge {
+      font-size: 11px;
+      font-weight: bold;
+      padding: 3px 8px;
+      border-radius: 12px;
+      background: #e2e8f0;
+      color: #4a5568;
+    }
+
+    .badge.new {
+      background: #ebf8ff;
+      color: #2b6cb0;
+    }
+
+    .badge.fix {
+      background: #f0fff4;
+      color: #2f855a;
+    }
+
+    .account-info {
+      background: #fffaf0;
+      border: 1px solid #feebc8;
+      color: #c05621;
+      padding: 15px 20px;
+      border-radius: 6px;
+      margin: 20px 0;
+    }
+
+    .info-box {
+      border-left: 4px solid var(--primary);
+      background-color: #f7fafc;
+      padding: 12px 20px;
+      margin: 20px 0;
+    }
+
+    .alert {
+      background-color: #fff5f5;
+      border-left: 4px solid #e53e3e;
+      padding: 12px 20px;
+      margin: 15px 0;
+    }
+
+    /* 印刷時のPDF用スタイル */
+    @media print {
+      body {
+        background-color: #fff;
+        padding: 0;
+      }
+      .container {
+        box-shadow: none;
+        padding: 0;
+        max-width: 100%;
+      }
+      pre {
+        background-color: #f7fafc;
+        color: #2d3748;
+        border: 1px solid var(--border);
+        page-break-inside: avoid;
+      }
+      pre code {
+        color: #2d3748;
+      }
+      h2 {
+        page-break-after: avoid;
+      }
+      .card {
+        page-break-inside: avoid;
+      }
+    }
+  </style>
+</head>
+<body>
+
+  <div class="container">
+    <header>
+      <h1>My Pivot 開発・共有ガイド</h1>
+      <p class="subtitle">実装された機能一覧と、各自のローカル環境での動かし方</p>
+    </header>
+
+    <p>チームの皆さん、ハッカソン開発お疲れ様です！<br>
+    バグの修正および新しいログイン機能、そして「地球の書庫 v3」をタブとして完全に統合しました。<br>
+    以下に各自のローカルPCで動かすための手順と、今回の変更点をまとめましたので動作確認の参考にしてください。</p>
+
+    <h2>🌟 実装された機能</h2>
+
+    <div class="card">
+      <div class="badge-container">
+        <span class="badge new">新規機能</span>
+      </div>
+      <h3>1. 🔐 ユーザー管理 & ログイン機能 (JWT認証)</h3>
+      <p>安全なログインフローを導入し、他のユーザーとピボットデータが混ざらない仕組みを構築しました。</p>
+      <ul>
+        <li><code>bcrypt</code> による安全なパスワードハッシュ化保存</li>
+        <li>JSON Web Token (JWT) を使用した認証フローの追加</li>
+        <li>タイムラインデータおよび作成・更新処理をログインユーザーに紐付ける形に更新</li>
+        <li>ログイン・新規登録の切り替えができるモダンな認証画面の構築</li>
+      </ul>
+    </div>
+
+    <div class="card">
+      <div class="badge-container">
+        <span class="badge fix">バグ修正</span>
+      </div>
+      <h3>2. ⏳ 五里霧中モード & タイムラインの安定化</h3>
+      <p>以前に発生していた画面のクラッシュやパスズレを解消しました。</p>
+      <ul>
+        <li>ピボット取得時にリレーション先のタグ配列がシリアライズされずクラッシュしていた問題を修正</li>
+        <li>SQLiteのDBパスを絶対パスに固定し、起動ディレクトリが異なっても <code>backend/my_pivot.db</code> を正しく参照するように修正</li>
+        <li>既存のグローバルCSSとの競合を解消し、デザインレイアウトをクリーンに調整</li>
+      </ul>
+    </div>
+
+    <div class="card">
+      <div class="badge-container">
+        <span class="badge new">新規機能</span>
+      </div>
+      <h3>3. 📚 地球の書庫 v3 の完全移植</h3>
+      <p>提示された <code>my_pivot_v3.html</code> の全ロジックとデザインをReactコンポーネントとして完全に移植しました。</p>
+      <ul>
+        <li>本棚の立体的な配置や、本を開くペラペラとした3Dめくりアニメーションの再現</li>
+        <li>入力に応じて過去の悩みを引っ張ってくる「召喚 (Recall)」機能のReact同期</li>
+        <li>SVGによる見込みと結果のズレを表す「判断キャリブレーション曲線」の描画</li>
+        <li>結果をたずねるベルマーク通知による、タイムライン上のスクロールジャンプ機能</li>
+        <li>デモ用として localStorage を使って安全かつ独立して動くように設計</li>
+      </ul>
+    </div>
+
+    <h2>💻 ローカル環境での起動方法</h2>
+    <p>リポジトリを最新に更新し、以下の2ステップで起動します。</p>
+
+    <h3>Step 1: バックエンドの起動 (Python / FastAPI)</h3>
+    <ol>
+      <li>ターミナルで <code>backend</code> フォルダに移動し、必要なパッケージをインストールします：
+        <pre><code>cd backend
+pip install -r requirements.txt</code></pre>
+      </li>
+      <li>DBにデモ用のユーザーとタイムラインデータを登録するスクリプトを動かします（DB初期化）：
+        <pre><code>PYTHONPATH=. python seed.py</code></pre>
+      </li>
+      <li>FastAPIサーバーを起動します：
+        <pre><code>uvicorn app.main:app --reload</code></pre>
+      </li>
+    </ol>
+
+    <div class="alert">
+      <strong>⚠️ Port 8000 がすでに使用されているエラーが出た場合</strong><br>
+      バックエンドの古いプロセスが終了せず残っています。以下のコマンドでプロセスを終了して再実行してください：
+      <ul>
+        <li>Mac: <code>kill -9 $(lsof -t -i:8000)</code></li>
+        <li>Windows: <code>taskkill /f /im python.exe</code></li>
+      </ul>
+    </div>
+
+    <h3>Step 2: フロントエンドの起動 (TypeScript / React / Vite)</h3>
+    <ol>
+      <li>別の新しいターミナルを開き、<code>frontend</code> フォルダに移動してパッケージをインストールします：
+        <pre><code>cd frontend
+npm install</code></pre>
+      </li>
+      <li>開発用サーバーを立ち上げます：
+        <pre><code>npm run dev</code></pre>
+        これでブラウザが自動的に開き、<code>http://localhost:5173</code> 等でアプリを確認できます。
+      </li>
+    </ol>
+
+    <h2>👤 動作確認用デモアカウント</h2>
+    <p>アプリのログイン画面で使用できる初期テストアカウントです：</p>
+    <div class="account-info">
+      <strong>メールアドレス:</strong> <code>demo@example.com</code><br>
+      <strong>パスワード:</strong> <code>password123</code>
+    </div>
+    <p>※ 「新規登録」タブから新しいユーザーを登録して個別のタイムラインを作ることもできます。</p>
+
+    <h2>💡 チームへの提案（審査を勝ち取るアイデア）</h2>
+    <div class="info-box">
+      ハッカソンの審査基準である「<strong>好き・情熱が伝わるか</strong>」の訴求を高めるため、デモ用の初期データをメンバー自身の実体験に差し替えるのが非常におすすめです。<br>
+      修正箇所：<code>backend/seed.py</code> の <code>SAMPLE_DATA</code><br>
+      ここに、「Reactにするか迷った」「ハッカソン初日、チーム編成で悩んだ」などリアルな葛藤と判断結果を書き込んでおくと、デモ発表時の説得力が劇的にアップします。
+    </div>
+
+  </div>
+
+</body>
+</html>
