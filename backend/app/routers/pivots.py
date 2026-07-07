@@ -1,185 +1,127 @@
-# pyrefly: ignore [missing-import]
+"""
+ピボット関連のAPI
+
+エンドポイント：
+- POST   /api/pivots        新規作成（タグ整理も実行）
+- GET    /api/pivots        一覧取得（タイムライン用）
+- GET    /api/pivots/{id}   個別取得
+- PATCH  /api/pivots/{id}   評価(flag)の更新
+- GET    /api/pivots/search 3軸検索
+"""
+from datetime import datetime
 from typing import Optional, List
+
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlmodel import Session, select
-from datetime import datetime
-
-from app.database import get_session
-from app.models import Pivot, Tag, PivotTagLink, Layer, Flag
-from app.services.tag_mapper import map_tag_to_category
 from pydantic import BaseModel
 
-router = APIRouter(prefix="/pivots", tags=["pivots"])
+from app.database import get_session
+from app.models import Pivot, Tag, Layer, Flag
+from app.services.tag_mapper import map_tag_to_category
+
+router = APIRouter(prefix="/api/pivots", tags=["pivots"])
 
 
-class TagOut(BaseModel):
-    id: int
-    name: str
-    category: str
-
-    class Config:
-        from_attributes = True
-
-
-class PivotOut(BaseModel):
-    id: int
-    title: str
-    content: str
-    layer: Layer
-    flag: Optional[Flag]
-    confidence: Optional[int]
-    image_url: Optional[str]
-    created_at: datetime
-    tags: List[TagOut] = []
-
-    class Config:
-        from_attributes = True
-
-
+# --- リクエスト/レスポンスの形 ---
 class PivotCreate(BaseModel):
     title: str
     content: str
     layer: Layer = Layer.PIVOT
     confidence: Optional[int] = None
-    image_url: Optional[str] = None
-    tag_names: List[str] = []  # 例: ["#絶望", "#進路"]
+    tag_names: List[str] = []
 
 
 class FlagUpdate(BaseModel):
     flag: Flag
 
 
+# --- 新規作成 ---
+@router.post("")
+def create_pivot(data: PivotCreate, session: Session = Depends(get_session)):
+    pivot = Pivot(
+        title=data.title,
+        content=data.content,
+        layer=data.layer,
+        confidence=data.confidence,
+    )
+    # 先にpivotをsessionに登録してからタグをひもづける
+    # （順序を守らないとSQLAlchemyがタグ追加を無視する）
+    session.add(pivot)
 
-def _get_or_create_tags(tag_names: List[str], session: Session) -> List[Tag]:
-    """タグ名のリストを受け取り、DBに存在すれば取得・なければ作成して返す。"""
-    tags: List[Tag] = []
-    for name in tag_names:
+    # タグを整理してひもづける
+    for name in data.tag_names:
+        category = map_tag_to_category(name)
+        # 既存タグがあれば再利用、なければ作成
         existing = session.exec(select(Tag).where(Tag.name == name)).first()
         if existing:
-            tags.append(existing)
+            pivot.tags.append(existing)
         else:
-            category = map_tag_to_category(name)
-            new_tag = Tag(name=name, category=category)
-            session.add(new_tag)
-            session.flush()  # IDを確定させる
-            tags.append(new_tag)
-    return tags
-
-
-def _pivot_to_out(pivot: Pivot) -> PivotOut:
-    """PivotモデルをPivotOutスキーマに変換する。"""
-    return PivotOut(
-        id=pivot.id,
-        title=pivot.title,
-        content=pivot.content,
-        layer=pivot.layer,
-        flag=pivot.flag,
-        confidence=pivot.confidence,
-        image_url=pivot.image_url,
-        created_at=pivot.created_at,
-        tags=[TagOut(id=t.id, name=t.name, category=t.category) for t in pivot.tags],
-    )
-
-
-@router.post("", response_model=PivotOut, status_code=201)
-def create_pivot(body: PivotCreate, session: Session = Depends(get_session)):
-    """五里霧中モードの記録を新規作成する。"""
-    pivot = Pivot(
-        title=body.title,
-        content=body.content,
-        layer=body.layer,
-        confidence=body.confidence,
-        image_url=body.image_url,
-    )
-    session.add(pivot)
-    session.flush()  # IDを確定させる
-
-    tags = _get_or_create_tags(body.tag_names, session)
-    for tag in tags:
-        link = PivotTagLink(pivot_id=pivot.id, tag_id=tag.id)
-        session.add(link)
+            pivot.tags.append(Tag(name=name, category=category))
 
     session.commit()
     session.refresh(pivot)
-    return _pivot_to_out(pivot)
+    # tags を明示的に読み込んでレスポンスに含める
+    return {
+        "id": pivot.id,
+        "title": pivot.title,
+        "content": pivot.content,
+        "layer": pivot.layer,
+        "flag": pivot.flag,
+        "confidence": pivot.confidence,
+        "created_at": pivot.created_at,
+        "tags": [{"name": t.name, "category": t.category} for t in pivot.tags],
+    }
 
 
-@router.get("", response_model=List[PivotOut])
-def list_pivots(
-    # 3軸検索パラメータ
-    q: Optional[str] = Query(default=None, description="タイトル・本文の全文検索（意味軸）"),
-    tag: Optional[str] = Query(default=None, description="タグ名で絞り込み（タグ軸）"),
-    from_date: Optional[datetime] = Query(default=None, description="作成日時の始点（いつ軸）"),
-    to_date: Optional[datetime] = Query(default=None, description="作成日時の終点（いつ軸）"),
-    layer: Optional[Layer] = Query(default=None, description="レイヤー絞り込み"),
-    flag: Optional[Flag] = Query(default=None, description="SUCCESS / REGRET 絞り込み"),
+# --- 一覧取得（新しい順） ---
+@router.get("")
+def list_pivots(session: Session = Depends(get_session)):
+    pivots = session.exec(select(Pivot).order_by(Pivot.created_at)).all()
+    return pivots
+
+
+# --- 3軸検索（いつ・意味・タグ） ---
+@router.get("/search")
+def search_pivots(
+    keyword: Optional[str] = Query(None, description="意味（タイトル）検索"),
+    category: Optional[str] = Query(None, description="種類（タグカテゴリ）"),
     session: Session = Depends(get_session),
 ):
-    """ピボット一覧を取得する（3軸検索対応）。"""
-    statement = select(Pivot)
+    stmt = select(Pivot)
+    if keyword:
+        stmt = stmt.where(Pivot.title.contains(keyword))
+    pivots = session.exec(stmt).all()
 
-    # 意味軸：タイトル・本文の部分一致
-    if q:
-        statement = statement.where(
-            (Pivot.title.contains(q)) | (Pivot.content.contains(q))
-        )
-
-    # いつ軸：作成日時の範囲
-    if from_date:
-        statement = statement.where(Pivot.created_at >= from_date)
-    if to_date:
-        statement = statement.where(Pivot.created_at <= to_date)
-
-    # レイヤー絞り込み
-    if layer:
-        statement = statement.where(Pivot.layer == layer)
-
-    # フラグ絞り込み
-    if flag:
-        statement = statement.where(Pivot.flag == flag)
-
-    pivots = session.exec(statement.order_by(Pivot.created_at.desc())).all()
-
-    # タグ軸：メモリ上でフィルタ（多対多のJOINは後で最適化可能）
-    if tag:
-        pivots = [p for p in pivots if any(t.name == tag for t in p.tags)]
-
-    return [_pivot_to_out(p) for p in pivots]
+    # カテゴリでの絞り込み（タグ経由）
+    if category:
+        pivots = [
+            p for p in pivots
+            if any(t.category == category for t in p.tags)
+        ]
+    return pivots
 
 
-@router.get("/{pivot_id}", response_model=PivotOut)
+# --- 個別取得 ---
+@router.get("/{pivot_id}")
 def get_pivot(pivot_id: int, session: Session = Depends(get_session)):
-    """ピボット詳細を取得する（ノードクリック時）。"""
     pivot = session.get(Pivot, pivot_id)
     if not pivot:
         raise HTTPException(status_code=404, detail="Pivot not found")
-    return _pivot_to_out(pivot)
+    return pivot
 
 
-@router.patch("/{pivot_id}/flag", response_model=PivotOut)
-def update_flag(pivot_id: int, body: FlagUpdate, session: Session = Depends(get_session)):
-    """成功 / 後悔フラグを後から付与・更新する。"""
+# --- 評価の更新（成功/後悔フラグ） ---
+@router.patch("/{pivot_id}")
+def update_flag(
+    pivot_id: int,
+    data: FlagUpdate,
+    session: Session = Depends(get_session),
+):
     pivot = session.get(Pivot, pivot_id)
     if not pivot:
         raise HTTPException(status_code=404, detail="Pivot not found")
-    pivot.flag = body.flag
+    pivot.flag = data.flag
     session.add(pivot)
     session.commit()
     session.refresh(pivot)
-    return _pivot_to_out(pivot)
-
-
-@router.delete("/{pivot_id}", status_code=204)
-def delete_pivot(pivot_id: int, session: Session = Depends(get_session)):
-    """ピボットを削除する。"""
-    pivot = session.get(Pivot, pivot_id)
-    if not pivot:
-        raise HTTPException(status_code=404, detail="Pivot not found")
-
-    # リンクテーブルの行を先に削除
-    links = session.exec(select(PivotTagLink).where(PivotTagLink.pivot_id == pivot_id)).all()
-    for link in links:
-        session.delete(link)
-
-    session.delete(pivot)
-    session.commit()
+    return pivot

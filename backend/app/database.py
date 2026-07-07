@@ -1,15 +1,28 @@
-# pyrefly: ignore [missing-import]
-from sqlmodel import SQLModel, Session, create_engine
+"""
+データベース接続設定
 
-DATABASE_URL = "sqlite:///database.db"
+開発時は SQLite を使う（セットアップ不要・ファイル1つで完結）。
+本番でクラウドに載せる場合は DATABASE_URL を差し替えるだけでよい。
+"""
+from sqlmodel import SQLModel, create_engine, Session
 
-engine = create_engine(DATABASE_URL)
+# SQLite ファイル。backend/ 直下に my_pivot.db が作られる
+DATABASE_URL = "sqlite:///./my_pivot.db"
+
+# check_same_thread=False は SQLite を FastAPI で使うための定番設定
+engine = create_engine(
+    DATABASE_URL,
+    echo=False,
+    connect_args={"check_same_thread": False},
+)
+
 
 def create_db_and_tables():
-    """DBとテーブルを作成する（ファイルがなければ新規作成）"""
+    """アプリ起動時にテーブルを作成する。"""
     SQLModel.metadata.create_all(engine)
 
-def get_session() -> Session:
-    """セッションの使い捨てコンテキストマネージャ"""
+
+def get_session():
+    """APIごとにDBセッションを渡すための依存関数。"""
     with Session(engine) as session:
         yield session
