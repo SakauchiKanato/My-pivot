@@ -1,68 +1,58 @@
-function App() {
+/**
+ * My Pivot メイン画面
+ *
+ * 左に五里霧中モード（入力）、右にタイムライン（参照）を並べる。
+ * これが「入力 → 整理 → タイムライン」の1ループを1画面で見せる構成。
+ */
+import { useEffect, useState } from "react";
+import { fetchPivots, type Pivot } from "./lib/api";
+import { Timeline } from "./components/Timeline";
+import { FogMode } from "./components/FogMode";
+import "./App.css";
+
+export default function App() {
+  const [pivots, setPivots] = useState<Pivot[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  const load = async () => {
+    try {
+      setError(null);
+      const data = await fetchPivots();
+      setPivots(data);
+    } catch (e) {
+      setError("バックエンドに接続できません。localhost:8000 が起動しているか確認してください。");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    load();
+  }, []);
+
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', minHeight: '100vh', backgroundColor: '#f8fafc', color: '#333', fontFamily: 'sans-serif' }}>
-      
-      <header style={{ 
-        height: '80px', 
-        backgroundColor: '#ffffff', 
-        display: 'flex', 
-        alignItems: 'center', 
-        padding: '0 40px', 
-        borderBottom: '1px solid #e2e8f0' 
-      }}>
-        <h1 style={{ fontSize: '24px', fontWeight: 'bold', margin: 0, color: '#1e1b29' }}>My pivot</h1><br />
-        <p style={{ marginLeft: '20px', color: '#1e1b29' }}>迷った数だけ私は進んだ</p>
+    <div className="app">
+      <header className="app-header">
+        <h1>My Pivot</h1>
+        <p className="tagline">迷った数だけ、私は進んだ。</p>
       </header>
 
-      <div style={{ display: 'flex', flex: 1, padding: '40px', gap: '40px', alignItems: 'flex-start' }}>
-        
-        <div style={{ 
-          width: '350px', 
-          backgroundColor: '#1e1b29', // 濃い紫色
-          color: '#fff', 
-          padding: '30px', 
-          borderRadius: '20px', // 四隅を丸くして独立したカードに
-          boxShadow: '0 10px 25px rgba(0,0,0,0.1)', // 少し影をつけて浮かせる
-          display: 'flex',
-          flexDirection: 'column',
-          gap: '20px'
-        }}>
-          <h3 style={{ fontSize: '18px', margin: 0, color: '#fff' ,fontFamily: 'sans-serif', textAlign: 'left' }}>五里夢中モード</h3><br />
-          <p style={{ color: '#fff', fontSize: '14px', lineHeight: '0', textAlign: 'left' }}>
-            綺麗に書かなくていい。迷いをそのまま吐き出そう。
-          </p>
-          
-          <div>
-            <input 
-              type="text" 
-              placeholder="この迷いに名前をつけるなら？" 
-              style={{ width: '100%', padding: '12px', borderRadius: '8px', border: 'none', backgroundColor: '#2d283e', color: '#fff' }} 
-            />
-          </div>
+      <div className="app-body">
+        <section className="input-col">
+          <FogMode onCreated={load} />
+        </section>
 
-          <div>
-            <textarea 
-              placeholder="今の気持ちを殴り書き..." 
-              rows={5}
-              style={{ width: '100%', padding: '12px', borderRadius: '8px', border: 'none', backgroundColor: '#2d283e', color: '#fff', resize: 'none' }} 
-            />
-          </div>
-
-
-          <button style={{ backgroundColor: '#5b3e85', color: '#fff', padding: '14px', border: 'none', borderRadius: '8px', cursor: 'pointer', fontWeight: 'bold' }}>
-            この迷いを記録する
-          </button>
-        </div>
-
-
-        <main style={{ flex: 1 }}>
-          <h2 style={{ fontSize: '24px', fontWeight: 'bold', margin: '0 0 20px 0' }}>ピボット・タイムライン</h2>
-          <p style={{ color: '#64748b' }}>ここに右側の白いカード（タイムライン）を並べていきます。</p>
-        </main>
-
+        <section className="timeline-col">
+          <h2 className="col-title">ピボット・タイムライン</h2>
+          {loading && <p className="status">読み込み中…</p>}
+          {error && <p className="status error">{error}</p>}
+          {!loading && !error && pivots.length === 0 && (
+            <p className="status">まだ記録がありません。左から最初の迷いを記録しよう。</p>
+          )}
+          {!loading && !error && <Timeline pivots={pivots} />}
+        </section>
       </div>
     </div>
   );
 }
-
-export default App;
