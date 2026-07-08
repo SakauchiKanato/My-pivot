@@ -1,149 +1,87 @@
-/**
- * ログイン / 新規登録 画面
- *
- * タブで「ログイン」と「新規登録」を切り替える。
- * 成功時は onSuccess() を呼んでメイン画面に移行する。
- */
 import { useState } from "react";
-import { login, register } from "../lib/auth";
+import { apiLogin, apiRegister } from "../lib/api";
+import { saveAuth } from "../lib/auth";
+import { FLAGS } from "../config/flags";
 
-interface Props {
-  onSuccess: () => void;
-}
-
-export function LoginPage({ onSuccess }: Props) {
-  const [tab, setTab] = useState<"login" | "register">("login");
-
-  // ログインフォーム
-  const [loginEmail, setLoginEmail] = useState("");
-  const [loginPassword, setLoginPassword] = useState("");
-
-  // 登録フォーム
-  const [regUsername, setRegUsername] = useState("");
-  const [regEmail, setRegEmail] = useState("");
-  const [regPassword, setRegPassword] = useState("");
-
-  const [loading, setLoading] = useState(false);
+export function LoginPage({ onSuccess }: { onSuccess: () => void }) {
+  const [mode, setMode] = useState<"login" | "register">("login");
+  const [username, setUsername] = useState("");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
 
-  const handleLogin = async () => {
-    if (!loginEmail || !loginPassword) return;
-    setLoading(true);
+  const submit = async () => {
+    setBusy(true);
     setError(null);
     try {
-      await login({ email: loginEmail, password: loginPassword });
+      const res =
+        mode === "login"
+          ? await apiLogin(email, password)
+          : await apiRegister(username, email, password);
+      saveAuth(res.access_token, { userId: res.user_id, username: res.username });
       onSuccess();
-    } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : "ログインに失敗しました");
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "接続に失敗しました");
     } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleRegister = async () => {
-    if (!regUsername || !regEmail || !regPassword) return;
-    setLoading(true);
-    setError(null);
-    try {
-      await register({ username: regUsername, email: regEmail, password: regPassword });
-      onSuccess();
-    } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : "登録に失敗しました");
-    } finally {
-      setLoading(false);
+      setBusy(false);
     }
   };
 
   return (
-    <div className="login-overlay">
-      <div className="login-card">
-        <div className="login-brand">
-          <h1 className="login-title">My Pivot</h1>
-          <p className="login-tagline">迷った数だけ、私は進んだ。</p>
+    <div className="auth-wrap">
+      <div className="auth-box">
+        <h1>書庫</h1>
+        <p className="subtitle">迷いを本に綴じ、時が来たら結果をたずねる。</p>
+        {mode === "register" && (
+          <input
+            className="field"
+            placeholder="ユーザー名"
+            value={username}
+            onChange={(e) => setUsername(e.target.value)}
+          />
+        )}
+        <input
+          className="field"
+          type="email"
+          placeholder="メールアドレス"
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+        />
+        <input
+          className="field"
+          type="password"
+          placeholder="パスワード"
+          value={password}
+          onChange={(e) => setPassword(e.target.value)}
+          onKeyDown={(e) => e.key === "Enter" && submit()}
+        />
+        {error && <div className="auth-error">{error}</div>}
+        <button className="plain dark" style={{ width: "100%" }} disabled={busy} onClick={submit}>
+          {mode === "login" ? "書庫に入る" : "登録して入る"}
+        </button>
+        <div className="auth-switch">
+          {mode === "login" ? (
+            <>
+              はじめての方は{" "}
+              <button type="button" onClick={() => setMode("register")}>
+                新規登録
+              </button>
+            </>
+          ) : (
+            <>
+              アカウントをお持ちの方は{" "}
+              <button type="button" onClick={() => setMode("login")}>
+                ログイン
+              </button>
+            </>
+          )}
         </div>
-
-        {/* タブ切り替え */}
-        <div className="login-tabs">
-          <button
-            className={`login-tab ${tab === "login" ? "active" : ""}`}
-            onClick={() => { setTab("login"); setError(null); }}
-          >
-            ログイン
-          </button>
-          <button
-            className={`login-tab ${tab === "register" ? "active" : ""}`}
-            onClick={() => { setTab("register"); setError(null); }}
-          >
-            新規登録
-          </button>
-        </div>
-
-        {error && <p className="login-error">{error}</p>}
-
-        {tab === "login" ? (
-          <div className="login-form">
-            <input
-              id="login-email"
-              className="login-input"
-              type="email"
-              placeholder="メールアドレス"
-              value={loginEmail}
-              onChange={(e) => setLoginEmail(e.target.value)}
-              onKeyDown={(e) => e.key === "Enter" && handleLogin()}
-            />
-            <input
-              id="login-password"
-              className="login-input"
-              type="password"
-              placeholder="パスワード"
-              value={loginPassword}
-              onChange={(e) => setLoginPassword(e.target.value)}
-              onKeyDown={(e) => e.key === "Enter" && handleLogin()}
-            />
-            <button
-              id="login-submit"
-              className="login-submit"
-              onClick={handleLogin}
-              disabled={loading || !loginEmail || !loginPassword}
-            >
-              {loading ? "確認中…" : "ログイン"}
-            </button>
-          </div>
-        ) : (
-          <div className="login-form">
-            <input
-              id="reg-username"
-              className="login-input"
-              type="text"
-              placeholder="ユーザー名"
-              value={regUsername}
-              onChange={(e) => setRegUsername(e.target.value)}
-            />
-            <input
-              id="reg-email"
-              className="login-input"
-              type="email"
-              placeholder="メールアドレス"
-              value={regEmail}
-              onChange={(e) => setRegEmail(e.target.value)}
-            />
-            <input
-              id="reg-password"
-              className="login-input"
-              type="password"
-              placeholder="パスワード（6文字以上）"
-              value={regPassword}
-              onChange={(e) => setRegPassword(e.target.value)}
-              onKeyDown={(e) => e.key === "Enter" && handleRegister()}
-            />
-            <button
-              id="reg-submit"
-              className="login-submit"
-              onClick={handleRegister}
-              disabled={loading || !regUsername || !regEmail || !regPassword}
-            >
-              {loading ? "登録中…" : "アカウントを作成"}
-            </button>
+        {FLAGS.showDemoCredentials && (
+          <div className="demo-hint">
+            デモ用: demo@example.com / demopass
+            <br />
+            (backend/seed.py で投入。ピッチ前に実データへ差し替え)
           </div>
         )}
       </div>
