@@ -47,7 +47,7 @@ def map_tag_to_category(tag_name: str) -> str:
     # if USE_LLM:
     #     return llm_mapper.classify(tag_name)
 
-    return DEFAULT_CATEGORY
+    return "その他"
 
 
 def map_tags(tag_names: list[str]) -> list[dict]:

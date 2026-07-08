@@ -8,6 +8,7 @@
 - GET    /api/pivots/{id}   個別取得
 - PATCH  /api/pivots/{id}   評価(flag)の更新
 """
+
 from datetime import datetime
 from typing import Optional, List
 
@@ -19,6 +20,7 @@ from app.database import get_session
 from app.models import Pivot, Tag, Layer, Flag, User
 from app.services.tag_mapper import map_tag_to_category
 from app.auth import get_current_user
+from app.services.llm_bias_checker import check_outcome_bias,BiasCheckResult
 
 router = APIRouter(prefix="/api/pivots", tags=["pivots"])
 
@@ -32,8 +34,17 @@ class PivotCreate(BaseModel):
     tag_names: List[str] = []
 
 
+
 class FlagUpdate(BaseModel):
     flag: Flag
+    reason_judgment: Optional[str] = None
+    ai_question: Optional[str] = None
+    ai_chat_history: Optional[str] = None
+
+class BiasCheckRequest(BaseModel):
+    flag: Flag
+    reason_judgment: str
+
 
 
 def _serialize_pivot(p: Pivot) -> dict:
@@ -47,6 +58,9 @@ def _serialize_pivot(p: Pivot) -> dict:
         "confidence": p.confidence,
         "created_at": p.created_at,
         "tags": [{"name": t.name, "category": t.category} for t in p.tags],
+        "is_ai_intervened": p.is_ai_intervened,
+        "ai_question": p.ai_question,
+        "ai_chat_history": p.ai_chat_history,
     }
 
 
@@ -136,7 +150,7 @@ def get_pivot(
     return _serialize_pivot(pivot)
 
 
-# --- 評価の更新（成功/後悔フラグ） ---
+# --- 評価の更新（成功/後悔フラグと、理由の保存） ---
 @router.patch("/{pivot_id}")
 def update_flag(
     pivot_id: int,
@@ -145,12 +159,47 @@ def update_flag(
     current_user: User = Depends(get_current_user),
 ):
     pivot = session.get(Pivot, pivot_id)
-    if not pivot:
+    if not pivot or pivot.user_id != current_user.id:
         raise HTTPException(status_code=404, detail="Pivot not found")
-    if pivot.user_id != current_user.id:
-        raise HTTPException(status_code=403, detail="アクセスが許可されていません")
+    
     pivot.flag = data.flag
+    # 理由も保存する
+    if data.reason_judgment is not None:
+        pivot.reason_judgment = data.reason_judgment
+
+    # AIの問いかけを押し切った場合
+    if data.ai_question is not None:
+        pivot.ai_question = data.ai_question
+        pivot.is_ai_intervened = True
+
+    # AIとの葛藤履歴を保存
+    if data.ai_chat_history is not None:
+        pivot.ai_chat_history = data.ai_chat_history
+
     session.add(pivot)
     session.commit()
     session.refresh(pivot)
     return _serialize_pivot(pivot)
+
+
+# --- AIによるアウトカムバイアス判定 ---
+@router.post("/{pivot_id}/check_bias", response_model=BiasCheckResult)
+def check_bias(
+    pivot_id: int,
+    data: BiasCheckRequest,
+    session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user),
+):
+    pivot = session.get(Pivot, pivot_id)
+    if not pivot or pivot.user_id != current_user.id:
+        raise HTTPException(status_code=404, detail="Pivot not found")
+    
+    # 決定時の情報と、今回の入力情報をAIに渡す
+    result = check_outcome_bias(
+        title=pivot.title,
+        content=pivot.content,
+        confidence=pivot.confidence or 3,
+        flag=data.flag.value,
+        reason_judgment=data.reason_judgment
+    )
+    return result

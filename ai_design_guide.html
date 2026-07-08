@@ -1,0 +1,343 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>My Pivot — AI機能の設計思想と使い方</title>
+  <style>
+    :root {
+      --primary: #6556b3;
+      --secondary: #b88a36;
+      --bg: #f8f9fa;
+      --text: #2d3748;
+      --light-bg: #fff;
+      --border: #e2e8f0;
+      --code-bg: #f1f5f9;
+      --success: #2f6f58;
+      --warning: #ea580c;
+      --step-bg: #edf2f7;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+      line-height: 1.7;
+      color: var(--text);
+      background-color: var(--bg);
+      margin: 0;
+      padding: 40px 20px;
+    }
+
+    .container {
+      max-width: 850px;
+      margin: 0 auto;
+      background: var(--light-bg);
+      padding: 40px 50px;
+      border-radius: 12px;
+      box-shadow: 0 10px 25px rgba(0, 0, 0, 0.05);
+    }
+
+    header {
+      border-bottom: 2px solid var(--primary);
+      padding-bottom: 20px;
+      margin-bottom: 30px;
+      text-align: center;
+    }
+
+    h1 {
+      color: var(--primary);
+      margin: 0 0 10px 0;
+      font-size: 32px;
+      font-weight: 700;
+    }
+
+    .subtitle {
+      color: #718096;
+      font-size: 16px;
+      margin: 0;
+    }
+
+    h2 {
+      color: var(--primary);
+      border-left: 4px solid var(--secondary);
+      padding-left: 12px;
+      margin-top: 50px;
+      font-size: 24px;
+    }
+
+    h3 {
+      color: #4a5568;
+      font-size: 20px;
+      margin-top: 30px;
+      border-bottom: 1px solid var(--border);
+      padding-bottom: 8px;
+    }
+    
+    .step-title {
+      color: var(--primary);
+      font-size: 18px;
+      font-weight: bold;
+      margin-top: 24px;
+      margin-bottom: 8px;
+    }
+
+    p {
+      margin-bottom: 16px;
+    }
+
+    .box {
+      background: #f8fafc;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 20px;
+      margin: 24px 0;
+    }
+
+    .box-conflict {
+      background: #fff7ed;
+      border: 1px solid #fdba74;
+      border-left: 4px solid var(--warning);
+    }
+    
+    .box-step {
+      background: var(--step-bg);
+      border: 1px solid var(--border);
+      border-left: 4px solid var(--primary);
+    }
+
+    .highlight {
+      background: linear-gradient(transparent 60%, #fef08a 40%);
+      font-weight: bold;
+    }
+
+    ul {
+      padding-left: 24px;
+    }
+
+    li {
+      margin-bottom: 10px;
+    }
+
+    code {
+      background: var(--code-bg);
+      padding: 3px 6px;
+      border-radius: 4px;
+      font-family: SFMono-Regular, Consolas, "Liberation Mono", Menlo, monospace;
+      font-size: 0.9em;
+      color: #d53f8c;
+    }
+    
+    pre code {
+      display: block;
+      padding: 12px;
+      overflow-x: auto;
+      color: #2d3748;
+      background: #f7fafc;
+      border: 1px solid #e2e8f0;
+      line-height: 1.5;
+    }
+
+    .chat-bubble {
+      padding: 10px 14px;
+      border-radius: 8px;
+      margin-bottom: 10px;
+      font-size: 14px;
+      max-width: 80%;
+    }
+    .chat-user {
+      background: #ffffff;
+      border: 1px solid #e2e8f0;
+      margin-left: auto;
+    }
+    .chat-ai {
+      background: #fef08a;
+      border: none;
+      margin-right: auto;
+    }
+  </style>
+</head>
+<body>
+
+<div class="container">
+  <header>
+    <h1>🤖 My Pivot</h1>
+    <p class="subtitle">AI機能の設計思想と、超詳細・使い方マニュアル</p>
+  </header>
+
+  <p>
+    My Pivot における最大の技術的挑戦は、<strong>「AI（アウトカムバイアス検出機能）」をどう扱うか</strong>でした。<br>
+    このドキュメントは、チーム内で生まれた「葛藤」から現在のアーキテクチャへとピボットした設計思想、具体的なコード実装、そして使い方を網羅したものです。
+  </p>
+
+  <h2>1. 発端：シンプルな「1ラリー」案の崩壊</h2>
+  <p>
+    元々、AI機能は「結果を綴じる時のバイアスを検出し、1度だけツッコミを入れて修正させる」という非常にシンプルな仕組みを想定していました。<br>
+    しかし、実装を進める中で<strong>決定的な矛盾</strong>に気づきました。
+  </p>
+
+  <div class="box box-conflict">
+    <h3>🔥 チーム内で生まれた「葛藤（問い）」</h3>
+    <p>
+      <em>「もし真面目にAIの問いに考え込んで何回も回答を直した結果、共同作業の綺麗な文章になってしまうなら、<strong>そのプロセス（葛藤）自体が残らないのはもっとマズいのでは？</strong>」</em>
+    </p>
+    <p>
+      このアプリの根源的価値は「自己検閲された綺麗な物語」ではなく「泥臭い生データ」を残すことです。<br>
+      AIに誘導されて綺麗に整った結果（1文）だけが残る仕様では、<strong>「AIを使ったせいで、生データが改ざんされる」という最悪の矛盾（キャリブレーションデータの汚染）</strong>を引き起こしてしまうことに気づいたのです。
+    </p>
+  </div>
+
+  <h2>2. 解決策：「葛藤の履歴」と「自己決定権」</h2>
+  <p>
+    この矛盾を解決するため、AI機能の実装方針を根本から見直し、以下の機能を実装しました。
+  </p>
+  <ul>
+    <li><strong>葛藤プロセスの全保存：</strong> AIとのやり取りをすべて保存し、後から「壁打ちの履歴」として見返せるようにしました。過程こそが最高の生データです。</li>
+    <li><strong>AIを「振り切る」機能：</strong> AIが突っ込んできても、「いや、これでいい」と手綱を人間が握ったまま記録できる自己決定権を保証しました。</li>
+    <li><strong>一発でパスした時の「称賛の一言」：</strong> バイアスがない場合はAIが肯定し、対話が美しく完結するようにしました。</li>
+  </ul>
+
+  <h2>3. 実装の裏側（コードでどう解決したか）</h2>
+  <p>
+    上記の思想を実現するために、バックエンドからフロントエンドまで、システム全体のアーキテクチャに手を加えました。
+  </p>
+
+  <h3>① データベース設計の変更（<code>models.py</code>）</h3>
+  <p>
+    当初は「最終的な理由」だけを保存する予定でしたが、葛藤の過程を全て残すために <code>ai_chat_history</code> カラムを新設しました。
+  </p>
+<pre><code># app/models.py
+class Pivot(SQLModel, table=True):
+    # ... (既存カラム)
+    ai_question: Optional[str] = Field(default=None)
+    reason_judgment: Optional[str] = Field(default=None)
+    # 👇 ここを追加。AIとユーザーの対話配列をJSON文字列として丸ごと保存する
+    ai_chat_history: Optional[str] = Field(default=None)
+</code></pre>
+
+  <h3>② AIプロンプトの改修（<code>llm_bias_checker.py</code>）</h3>
+  <p>
+    「バイアスが検出されなかった（パスした）」時に、ただ空文字を返すのではなく、ユーザーの言語化を肯定する一言を返すようにプロンプトを調整しました。これにより対話の着地が美しくなります。
+  </p>
+<pre><code># app/services/llm_bias_checker.py
+タスク:
+「振り返りの理由」の中に、「結果論（アウトカムバイアス）」が含まれていないか判定してください。
+- もし含まれている場合（has_bias = true）:
+  当時の視点に引き戻すような優しい問いかけを1つ生成してください。
+- もし含まれていない場合（has_bias = false）:
+  「素晴らしい振り返りですね。当時の状況がクリアに伝わります。」のような、ユーザーの言語化を肯定し称賛する一言を生成してください。
+</code></pre>
+
+  <h3>③ フロントエンドのUI出し分け（<code>Timeline.tsx</code>）</h3>
+  <p>
+    保存された履歴の長さ（配列の数）やAIの介入有無によって、タイムライン上の「バッジ」と「表示内容」を3つのパターンに分岐させるロジックを組みました。
+  </p>
+  <ul>
+    <li><strong>パターンA（振り切った）:</strong> <code>p.is_ai_intervened && p.ai_question</code><br> ⚠️オレンジの警告バッジを表示。</li>
+    <li><strong>パターンB（葛藤してパスした / 一発でパスした）:</strong> <code>!p.ai_question && p.ai_chat_history.length > 1</code><br> 💡緑の称賛バッジを表示。</li>
+    <li><strong>共通:</strong> 全パターンにおいて <code>p.reason_judgment</code>（最終的な理由）と <code>p.ai_chat_history</code>（葛藤のアコーディオン）を必ず表示する。</li>
+  </ul>
+
+
+  <h2>4. 【超詳細】AI機能の使い方・操作マニュアル</h2>
+  <p>
+    実際にアプリ内でどのようにAI機能が働き、ユーザーがどう操作するのか、ステップバイステップで解説します。
+  </p>
+
+  <div class="box box-step">
+    <div class="step-title">STEP 1: 結果の記録と理由の入力</div>
+    <p>
+      タイムライン上で、まだ結果が記録されていない（未評価の）ピボットを開きます。<br>
+      <code>[成功として綴じる]</code> または <code>[後悔として綴じる]</code> ボタンをクリックすると、モーダルが開きます。<br>
+      ここで、<strong>当時の決断に対する「今の振り返りの理由」</strong>をテキストボックスに入力し、<code>[AIに判定してもらう]</code> ボタンを押します。
+    </p>
+  </div>
+
+  <div class="box box-step">
+    <div class="step-title">STEP 2: AIによるバイアスチェック（運命の分かれ道）</div>
+    <p>
+      入力したテキストが裏側で Gemini API に送られます。<br>
+      AIは「結果を知っているからこそ言える『結果論（アウトカムバイアス）』になっていないか？」をチェックします。ここから <strong>3つのパターン</strong> に分岐します。
+    </p>
+  </div>
+
+  <div class="box box-step">
+    <div class="step-title">パターンA：一発でパスした場合（バイアスなし）</div>
+    <p>
+      あなたの入力した理由が、当時の視点をしっかり保てている素晴らしい振り返りだった場合です。
+    </p>
+    <ol>
+      <li>AIから「素晴らしい振り返りですね。当時の状況がクリアに伝わります。」と肯定のメッセージが返ってきます。</li>
+      <li>そのまま自動的にピボットが保存されます。</li>
+      <li>タイムライン上には <strong>「💡 AIとの壁打ちを経て言語化されました」</strong> という緑色のバッジが付きます。</li>
+    </ol>
+  </div>
+
+  <div class="box box-step">
+    <div class="step-title">パターンB：AIからツッコミが入り、修正してパスした場合</div>
+    <p>
+      あなたの入力に「後知恵バイアス」が含まれていた場合です。（例：「最初から失敗するって分かってた」など）
+    </p>
+    <ol>
+      <li>AIから、当時の視点に引き戻すような優しい問いかけが表示されます。</li>
+      <li>あなたはそれを見てハッとし、テキストボックスの文章を書き直して、再度 <code>[AIに判定してもらう]</code> を押します。</li>
+      <li>修正した文章にバイアスがなくなれば、パターンAと同様に保存され、緑色のバッジが付きます。</li>
+    </ol>
+  </div>
+
+  <div class="box box-step">
+    <div class="step-title">パターンC：AIのツッコミを「振り切って」記録した場合</div>
+    <p>
+      AIからツッコミが入ったものの、「いや、どうしてもこの言葉で残したいんだ！」という場合です。
+    </p>
+    <ol>
+      <li>AIからの問いかけが表示されている状態で、あえてテキストを直さずに <code>[このまま保存する]</code> ボタンを押します。</li>
+      <li>警告を振り切ってピボットが保存されます。</li>
+      <li>タイムライン上には <strong>「⚠️ AIの問いかけを振り切って記録されました」</strong> というオレンジ色のバッジが付きます。</li>
+    </ol>
+  </div>
+
+  <div class="box box-step">
+    <div class="step-title">STEP 3: タイムラインで「葛藤のプロセス」を見返す</div>
+    <p>
+      記録が完了したピボットをタイムライン上で開き、詳細を見ます。<br>
+      すると、<strong>「💬 AIとの葛藤プロセスを見る」</strong> というアコーディオンメニューが表示されます。
+      クリックして展開すると、以下のようにチャットアプリ形式でやり取りのすべてが残っています。
+    </p>
+    <div style="background: #f7fafc; padding: 15px; border-radius: 8px; margin-top: 10px;">
+      <div class="chat-bubble chat-user">
+        <strong>👤 あなた</strong><br>
+        「最初からこの選択肢は失敗するってわかってたんだよなぁ」
+      </div>
+      <div class="chat-bubble chat-ai">
+        <strong>🤖 AI</strong><br>
+        「結果を知った今だからそう思えるのかもしれません。決断した瞬間の、当時のあなたの期待度はどうでしたか？」
+      </div>
+      <div class="chat-bubble chat-user">
+        <strong>👤 あなた</strong><br>
+        「たしかに。当時は『もしかしたら一発逆転できるかも』と30%くらいの期待を持って賭けていました。」
+      </div>
+      <div class="chat-bubble chat-ai">
+        <strong>🤖 AI</strong><br>
+        「素晴らしい振り返りですね。当時の状況がクリアに伝わります。このまま記録しますね。」
+      </div>
+    </div>
+  </div>
+
+  <h2>5. 思想の深掘り：「なぜ、ここまで泥臭いプロセスを残すのか？」</h2>
+  <p>
+    このアプリの最大の目的は、<strong>「未来の自分の判断精度（キャリブレーション能力）を上げること」</strong>です。
+  </p>
+  <p>
+    人間は、成功を「自分の実力」、失敗を「不運」として片付けたがります。結果を知った後から「ほら、やっぱりな」と綺麗にまとめた物語（嘘の記憶）は、読んでいて気持ちが良いですが、未来の決断には1ミリも役に立ちません。
+  </p>
+  <p>
+    本当に価値があるのは、<strong><span class="highlight">「AIに結果論だと指摘されて、図星を突かれて悩み、絞り出した泥臭い真実」</span></strong>です。<br>
+    そして、AIが一方的に正解を出すのではなく、「自分自身で壁打ちしながら言語化し直した」という自己決定のプロセスを経ることで、その気づきは深く自分に刻まれます。
+  </p>
+  <p>
+    後からこのタイムラインを見返した時、そこにあるのは「AIに導かれた綺麗な正解」ではありません。「AIを鏡にして、自らもがきながら振り返った痕跡」です。<br>
+    この泥臭い葛藤のログこそが、次に迷った時の自分を救う、最高の道標（Pivot）になるのです。
+  </p>
+
+</div>
+</body>
+</html>

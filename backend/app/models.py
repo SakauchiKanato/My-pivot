@@ -73,6 +73,10 @@ class Pivot(SQLModel, table=True):
     confidence: Optional[int] = Field(default=None) # 当時の確信度 1-5
     image_url: Optional[str] = Field(default=None)  # 添付画像
     created_at: datetime = Field(default_factory=datetime.now)  # 「いつ」検索軸
+    reason_judgment: Optional[str] = Field(default=None)
+    ai_question: Optional[str] = Field(default=None)            # AIからの問いかけ
+    is_ai_intervened: bool = Field(default=False)               # AI介入があったかどうか
+    ai_chat_history: Optional[str] = Field(default=None)        # AIとの葛藤のチャット履歴(JSON文字列)
 
     # ユーザーとの紐付け（外部キー）
     user_id: Optional[int] = Field(default=None, foreign_key="user.id", index=True)

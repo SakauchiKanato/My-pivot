@@ -38,6 +38,9 @@ export interface Pivot {
   confidence: number | null;
   created_at: string;
   tags: Tag[];
+  is_ai_intervened?: boolean;
+  ai_question?: string;
+  ai_chat_history?: string;
 }
 
 export interface PivotCreate {
@@ -70,12 +73,27 @@ export async function createPivot(data: PivotCreate): Promise<Pivot> {
 }
 
 /** 成功/後悔の評価を更新 */
-export async function updateFlag(id: number, flag: Flag): Promise<Pivot> {
+export async function updateFlag(id: number, flag: Flag, reasonJudgment?: string, aiQuestion?: string, aiChatHistory?: string): Promise<Pivot> {
   const res = await fetch(`${API_BASE}/api/pivots/${id}`, {
     method: "PATCH",
     headers: authHeaders(),
-    body: JSON.stringify({ flag }),
+    body: JSON.stringify({ flag, reason_judgment: reasonJudgment, ai_question: aiQuestion, ai_chat_history: aiChatHistory }),
   });
   if (!res.ok) throw new Error("評価の更新に失敗しました");
+  return res.json();
+}
+
+/** AIによるアウトカムバイアス判定を呼び出す関数 */
+export async function checkOutcomeBias(
+  pivotId: number,
+  flag: Flag,
+  reasonJudgment: string
+): Promise<{ has_bias: boolean; question_to_user: string }> {
+  const res = await fetch(`${API_BASE}/api/pivots/${pivotId}/check_bias`, {
+    method: "POST",
+    headers: authHeaders(),
+    body: JSON.stringify({ flag, reason_judgment: reasonJudgment }),
+  });
+  if (!res.ok) throw new Error("バイアス判定に失敗しました");
   return res.json();
 }

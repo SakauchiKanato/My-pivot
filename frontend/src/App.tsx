@@ -95,7 +95,7 @@ export default function App() {
             {!loading && !error && pivots.length === 0 && (
               <p className="status">まだ記録がありません。左から最初の迷いを記録しよう。</p>
             )}
-            {!loading && !error && <Timeline pivots={pivots} />}
+            {!loading && !error && <Timeline pivots={pivots} onUpdate={load} />}
           </section>
         </div>
       ) : (
