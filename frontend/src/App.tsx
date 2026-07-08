@@ -1,108 +1,225 @@
-/**
- * My Pivot メイン画面
- *
- * 未ログイン → <LoginPage> を表示
- * ログイン済 → 左に五里霧中モード（入力）、右にタイムライン（参照）を並べる。
- */
-import { useEffect, useState } from "react";
-import { fetchPivots, type Pivot } from "./lib/api";
+import { useCallback, useEffect, useState } from "react";
+import type { Book, Entry, CalibrationStats, Shelf } from "./lib/api";
+import type { ServerFlags } from "./config/flags";
+import {
+  fetchLibrary,
+  fetchDue,
+  fetchCalibration,
+  createBook,
+  createEntry,
+  resolveEntry,
+  postponeEntry,
+  appendEntry,
+  withdrawEntry,
+  publishEntry,
+  joinSharedBook,
+} from "./lib/api";
 import { getAuthUser, logout, type AuthUser } from "./lib/auth";
-import { Timeline } from "./components/Timeline";
-import { FogMode } from "./components/FogMode";
+import { addMonthsISO, todayISO } from "./lib/dates";
 import { LoginPage } from "./components/LoginPage";
-import { EarthArchive } from "./components/EarthArchive";
-import "./App.css";
+import { TopBar } from "./components/TopBar";
+import { Bookcase } from "./components/Bookcase";
+import { BookOverlay } from "./components/BookOverlay";
+import { CalibrationModal } from "./components/CalibrationModal";
+import type { WriteDraft } from "./components/spread/WriteSection";
 
 export default function App() {
   const [user, setUser] = useState<AuthUser | null>(getAuthUser());
-  const [pivots, setPivots] = useState<Pivot[]>([]);
+  const [books, setBooks] = useState<Book[]>([]);
+  const [serverFlags, setServerFlags] = useState<ServerFlags | null>(null);
+  const [due, setDue] = useState<Entry[]>([]);
+  const [stats, setStats] = useState<CalibrationStats | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<"timeline" | "archive">("timeline");
 
-  const load = async () => {
+  const [openBookId, setOpenBookId] = useState<number | null>(null);
+  const [startMode, setStartMode] = useState<"toc" | "timeline" | null>(null);
+  const [focusEntryId, setFocusEntryId] = useState<number | null>(null);
+  const [meterOpen, setMeterOpen] = useState(false);
+  const [toast, setToast] = useState("");
+
+  const showToast = (msg: string) => {
+    setToast(msg);
+    window.setTimeout(() => setToast(""), 3200);
+  };
+
+  const reload = useCallback(async () => {
     try {
       setError(null);
-      const data = await fetchPivots();
-      setPivots(data);
+      const [lib, dueList, cal] = await Promise.all([
+        fetchLibrary(),
+        fetchDue(),
+        fetchCalibration(),
+      ]);
+      setBooks(lib.books);
+      setServerFlags(lib.flags);
+      setDue(dueList);
+      setStats(cal);
     } catch (e) {
-      setError("バックエンドに接続できません。localhost:8000 が起動しているか確認してください。");
+      const msg = e instanceof Error ? e.message : "";
+      if (msg === "401") {
+        logout();
+        setUser(null);
+      } else {
+        setError("バックエンドに接続できません。localhost:8000 が起動しているか確認してください。");
+      }
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
-    if (user && activeTab === "timeline") load();
-  }, [user, activeTab]);
+    if (user) reload();
+    else setLoading(false);
+  }, [user, reload]);
 
-  const handleLogin = () => {
-    setUser(getAuthUser());
-  };
-
-  const handleLogout = () => {
-    logout();
-    setUser(null);
-    setPivots([]);
-  };
-
-  // 未ログイン時はログイン画面を表示
   if (!user) {
-    return <LoginPage onSuccess={handleLogin} />;
+    return (
+      <LoginPage
+        onSuccess={() => {
+          setLoading(true);
+          setUser(getAuthUser());
+        }}
+      />
+    );
   }
+  if (loading) return <div className="loading-screen">書庫を開いています…</div>;
+
+  const openBook = books.find((b) => b.id === openBookId) ?? null;
+  const allEntries = books.flatMap((b) => b.entries);
+  const overlayOpen = openBook !== null;
+
+  const handleCreateBook = async (shelf: Shelf, title: string) => {
+    try {
+      await createBook(shelf, title);
+      await reload();
+      showToast(`『${title.slice(0, 12)}』を棚に置きました`);
+    } catch (e) {
+      showToast(e instanceof Error ? e.message : "作成に失敗しました");
+    }
+  };
+
+  const handleCreateSharedBook = async (title: string, passcode: string) => {
+    await createBook("shared", title, passcode);
+    await reload();
+    showToast(`『${title.slice(0, 12)}』を共同の書架に置きました。合言葉「${passcode}」を仲間に伝えてください。`);
+  };
+
+  const handleJoinShared = async (passcode: string) => {
+    const book = await joinSharedBook(passcode);
+    await reload();
+    showToast(`『${book.title}』に参加しました。`);
+  };
 
   return (
-    <div className="app">
-      <header className="app-header">
-        <div className="header-left">
-          <h1>My Pivot</h1>
-          <p className="tagline">迷った数だけ、私は進んだ。</p>
-        </div>
-        <div className="header-center">
-          <div className="tab-switch">
-            <button
-              className={`tab-btn ${activeTab === "timeline" ? "active" : ""}`}
-              onClick={() => setActiveTab("timeline")}
-            >
-              タイムライン
-            </button>
-            <button
-              className={`tab-btn ${activeTab === "archive" ? "active" : ""}`}
-              onClick={() => setActiveTab("archive")}
-            >
-              地球の書庫 v3
-            </button>
-          </div>
-        </div>
-        <div className="header-right">
-          <span className="header-username">👤 {user.username}</span>
-          <button className="logout-btn" onClick={handleLogout}>
-            ログアウト
-          </button>
-        </div>
-      </header>
+    <main className="app">
+      <TopBar
+        user={user}
+        stats={stats}
+        due={due}
+        books={books}
+        onOpenMeter={() => setMeterOpen(true)}
+        onOpenDue={(entry) => {
+          setFocusEntryId(entry.id);
+          setStartMode("timeline");
+          setOpenBookId(entry.bookId);
+        }}
+        onLogout={() => {
+          logout();
+          setUser(null);
+          setBooks([]);
+        }}
+      />
+      {error && <div className="empty" style={{ maxWidth: 1180, margin: "0 auto 20px" }}>{error}</div>}
 
-      {activeTab === "timeline" ? (
-        <div className="app-body">
-          <section className="input-col">
-            <FogMode onCreated={load} />
-          </section>
+      <Bookcase
+        books={books}
+        overlayOpen={overlayOpen}
+        onOpenBook={(b) => {
+          setFocusEntryId(null);
+          setStartMode(null);
+          setOpenBookId(b.id);
+        }}
+        onCreateBook={handleCreateBook}
+        onCreateSharedBook={handleCreateSharedBook}
+        onJoinShared={handleJoinShared}
+      />
 
-          <section className="timeline-col">
-            <h2 className="col-title">ピボット・タイムライン</h2>
-            {loading && <p className="status">読み込み中…</p>}
-            {error && <p className="status error">{error}</p>}
-            {!loading && !error && pivots.length === 0 && (
-              <p className="status">まだ記録がありません。左から最初の迷いを記録しよう。</p>
-            )}
-            {!loading && !error && <Timeline pivots={pivots} />}
-          </section>
-        </div>
-      ) : (
-        <div className="archive-body">
-          <EarthArchive />
-        </div>
+      {openBook && (
+        <BookOverlay
+          key={openBook.id}
+          book={openBook}
+          books={books}
+          allEntries={allEntries}
+          startMode={startMode}
+          focusEntryId={focusEntryId}
+          serverFlags={serverFlags}
+          onClose={() => {
+            setOpenBookId(null);
+            setFocusEntryId(null);
+          }}
+          onSaveEntry={async (data) => {
+            await createEntry(openBook.id, data);
+            await reload();
+            const resolve = data.resolveDate ?? addMonthsISO(todayISO(), 6);
+            showToast(
+              data.resolveDate
+                ? `${resolve}に、結果をたずねます。`
+                : `6ヶ月後(${resolve})に、結果をたずねます。`
+            );
+          }}
+          onResolve={async (entryId, data) => {
+            await resolveEntry(entryId, data);
+            await reload();
+            showToast("結果を綴じました。計器に反映されています。");
+          }}
+          onPostpone={async (entryId) => {
+            const updated = await postponeEntry(entryId);
+            await reload();
+            showToast(`わかりました。1ヶ月後(${updated.resolveDate})に、もう一度たずねます。`);
+          }}
+          onAppend={async (entryId, text) => {
+            await appendEntry(entryId, text);
+            await reload();
+            showToast("追記を残しました。決定時の記録はそのままです。");
+          }}
+          onWithdraw={async (entry): Promise<WriteDraft> => {
+            const res = await withdrawEntry(entry.id);
+            await reload();
+            showToast("フォームに戻しました。書き直して、もう一度綴じてください。");
+            const w = res.withdrawn;
+            return {
+              title: w.title,
+              body: w.body,
+              tags: w.tags.map((t) => `#${t}`).join(" "),
+              confidence: w.confidence,
+            };
+          }}
+          onPublish={async (entryId, data) => {
+            const res = await publishEntry(entryId, data);
+            await reload();
+            showToast(
+              res.passcode
+                ? `出版しました。原本はあなたの書架に残っています。合言葉「${res.passcode}」を仲間に伝えてください。`
+                : "出版しました。原本はあなたの書架に残っています。"
+            );
+          }}
+        />
       )}
-    </div>
+
+      {meterOpen && stats && (
+        <CalibrationModal
+          stats={stats}
+          onClose={() => setMeterOpen(false)}
+          onDemoReset={() => {
+            showToast("デモ初期化は backend で `python seed.py --reset` を実行してください。");
+          }}
+        />
+      )}
+
+      <div id="toast" className={toast ? "show" : ""} role="status">
+        {toast}
+      </div>
+    </main>
   );
 }
