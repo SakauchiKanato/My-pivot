@@ -13,7 +13,7 @@
  * BookOverlay 側で見開きの左右ページにそれぞれ差し込む想定。
  */
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
 
 import type { Book, Entry } from "../../lib/api";
@@ -65,11 +65,8 @@ export function useWriteForm({ allEntries, books, initialDraft, onSave }: UseWri
     }
   }, [initialDraft]);
 
-  const recall = useMemo(() => {
-    const text = body.trim();
-    if (text.length < 12) return null;
-    return bestRecall(text, allEntries);
-  }, [body, allEntries]);
+  // 召喚: サーバーの意味検索(embedding)。使えないときは bigram に自動フォールバック
+  const recall = useSemanticRecall(body, allEntries);
 
 
   const recallBook = recall ? books.find((b) => b.id === recall.bookId) : null;

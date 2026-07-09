@@ -94,7 +94,7 @@ export function Badges({ entry }: { entry: Entry }) {
           transition: {
             duration: 3.2,
             repeat: Infinity,
-            ease: "easeInOut",
+            ease: "easeInOut" as const,
             repeatType: "mirror" as const,
           },
         },
@@ -107,7 +107,7 @@ export function Badges({ entry }: { entry: Entry }) {
           transition: {
             duration: 5.5,
             repeat: Infinity,
-            ease: "easeInOut",
+            ease: "easeInOut" as const,
             repeatType: "mirror" as const,
           },
         },
