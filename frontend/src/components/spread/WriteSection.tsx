@@ -5,8 +5,16 @@
  * - confidence は決定時に固定(後知恵バイアス対策)
  * - B-2: 公開トグルは置かない(FLAGS.publishPostHocOnly)。公開は年表から。
  * - A-2: 召喚は現行 "box" 方式。FLAGS.recallStyle で差し替え予定の受け皿。
+ *
+ * v4での変更点:
+ * 状態と保存ロジックを useWriteForm フックに集約し、
+ * 表示だけを WriteSectionLeft(本文・recall)/ WriteSectionRight
+ * (タイトル・タグ・確信度・日付・保存)に分割。
+ * BookOverlay 側で見開きの左右ページにそれぞれ差し込む想定。
  */
-import { useState } from "react";
+
+import { useEffect, useMemo, useState } from "react";
+
 import type { Book, Entry } from "../../lib/api";
 import { useSemanticRecall } from "../../lib/recall";
 import { addMonthsISO, todayISO } from "../../lib/dates";
@@ -21,7 +29,7 @@ export interface WriteDraft {
   confidence: number;
 }
 
-interface Props {
+interface UseWriteFormArgs {
   allEntries: Entry[];
   books: Book[];
   initialDraft?: WriteDraft | null;
@@ -34,7 +42,7 @@ interface Props {
   }) => Promise<void>;
 }
 
-export function WriteSection({ allEntries, books, initialDraft, onSave }: Props) {
+export function useWriteForm({ allEntries, books, initialDraft, onSave }: UseWriteFormArgs) {
   const [body, setBody] = useState(initialDraft?.body ?? "");
   const [title, setTitle] = useState(initialDraft?.title ?? "");
   const [tags, setTags] = useState(initialDraft?.tags ?? "");
@@ -43,8 +51,25 @@ export function WriteSection({ allEntries, books, initialDraft, onSave }: Props)
   const [resolveDate, setResolveDate] = useState("");
   const [status, setStatus] = useState("");
 
-  // 召喚: サーバーの意味検索(embedding)。使えないときは bigram に自動フォールバック
-  const recall = useSemanticRecall(body, allEntries);
+
+  // initialDraft が(onFix経由などで)新しく渡されたら、フォームに反映する。
+  // 以前は key={} での再マウントで実現していたが、hook を左右ページで
+  // 共有する都合上、明示的な同期に変更。
+  useEffect(() => {
+    if (initialDraft) {
+      setBody(initialDraft.body);
+      setTitle(initialDraft.title);
+      setTags(initialDraft.tags);
+      setConfidence(initialDraft.confidence);
+    }
+  }, [initialDraft]);
+
+  const recall = useMemo(() => {
+    const text = body.trim();
+    if (text.length < 12) return null;
+    return bestRecall(text, allEntries);
+  }, [body, allEntries]);
+
 
   const recallBook = recall ? books.find((b) => b.id === recall.bookId) : null;
 
@@ -71,6 +96,30 @@ export function WriteSection({ allEntries, books, initialDraft, onSave }: Props)
     setTags("");
   };
 
+  return {
+    body,
+    setBody,
+    title,
+    setTitle,
+    tags,
+    setTags,
+    confidence,
+    setConfidence,
+    dateUnknown,
+    setDateUnknown,
+    resolveDate,
+    setResolveDate,
+    status,
+    recall,
+    recallBook,
+    save,
+  };
+}
+
+export type WriteForm = ReturnType<typeof useWriteForm>;
+
+/** 左ページ:導入文 + 本文 + recall(似た過去の記録) */
+export function WriteSectionLeft({ form }: { form: WriteForm }) {
   return (
     <>
       <h2>この本に書く</h2>
@@ -81,37 +130,45 @@ export function WriteSection({ allEntries, books, initialDraft, onSave }: Props)
       <textarea
         className="note"
         placeholder="今の気持ちを、ここに。"
-        value={body}
-        onChange={(e) => setBody(e.target.value)}
+        value={form.body}
+        onChange={(e) => form.setBody(e.target.value)}
       />
-      <div className={`recall${recall ? " show" : ""}`}>
-        {recall && (
+      <div className={`recall${form.recall ? " show" : ""}`}>
+        {form.recall && (
           <>
             <div className="who">
               ― 似た迷いの記録(
-              {recallBook ? `${SHELF_SHORT[recallBook.shelf]} / ${recallBook.title}` : ""})
+              {form.recallBook ? `${SHELF_SHORT[form.recallBook.shelf]} / ${form.recallBook.title}` : ""})
             </div>
-            <b>{recall.title}</b>
+            <b>{form.recall.title}</b>
             <p className="hint" style={{ margin: 0 }}>
-              {(recall.body || "").slice(0, 60)}
+              {(form.recall.body || "").slice(0, 60)}
             </p>
-            <Badges entry={recall} />
+            <Badges entry={form.recall} />
           </>
         )}
       </div>
+    </>
+  );
+}
+
+/** 右ページ:タイトル・感情タグ・確信度・結果予定日・保存ボタン */
+export function WriteSectionRight({ form }: { form: WriteForm }) {
+  return (
+    <>
       <div className="label">この迷いに名前をつけるなら?</div>
       <input
         className="field"
         placeholder="例: 院進か就職か"
-        value={title}
-        onChange={(e) => setTitle(e.target.value)}
+        value={form.title}
+        onChange={(e) => form.setTitle(e.target.value)}
       />
       <div className="label">感情タグ</div>
       <input
         className="field"
         placeholder="#不安 #進路 #挑戦"
-        value={tags}
-        onChange={(e) => setTags(e.target.value)}
+        value={form.tags}
+        onChange={(e) => form.setTags(e.target.value)}
       />
       <div className="q-label">この選択がうまくいくと、今どのくらい思える?</div>
       <div className="stars-row">
@@ -125,9 +182,9 @@ export function WriteSection({ allEntries, books, initialDraft, onSave }: Props)
             <button
               key={i}
               type="button"
-              className={`star${i <= confidence ? " on" : ""}`}
+              className={`star${i <= form.confidence ? " on" : ""}`}
               aria-label={`${i} / 5`}
-              onClick={() => setConfidence(i)}
+              onClick={() => form.setConfidence(i)}
             >
               ★
             </button>
@@ -143,17 +200,19 @@ export function WriteSection({ allEntries, books, initialDraft, onSave }: Props)
       <div className="date-row">
         <input
           type="date"
-          disabled={dateUnknown}
-          value={resolveDate}
-          onChange={(e) => setResolveDate(e.target.value)}
+          disabled={form.dateUnknown}
+          value={form.resolveDate}
+          onChange={(e) => form.setResolveDate(e.target.value)}
         />
         <label className="checkline">
           <input
             type="checkbox"
-            checked={dateUnknown}
+            checked={form.dateUnknown}
             onChange={(e) => {
-              setDateUnknown(e.target.checked);
-              if (!e.target.checked && !resolveDate) setResolveDate(addMonthsISO(todayISO(), 1));
+              form.setDateUnknown(e.target.checked);
+              if (!e.target.checked && !form.resolveDate) {
+                form.setResolveDate(addMonthsISO(todayISO(), 1));
+              }
             }}
           />{" "}
           日付は未定(6ヶ月後にたずねます)
@@ -164,10 +223,10 @@ export function WriteSection({ allEntries, books, initialDraft, onSave }: Props)
         なら修正できます。その後は「追記」で重ねてください。
       </div>
       <div className="save-row">
-        <button type="button" className="plain dark" onClick={save}>
+        <button type="button" className="plain dark" onClick={form.save}>
           この迷いを綴じる
         </button>
-        <span className="save-status">{status}</span>
+        <span className="save-status">{form.status}</span>
       </div>
     </>
   );

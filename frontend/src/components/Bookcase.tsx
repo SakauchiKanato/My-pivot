@@ -204,8 +204,13 @@ export function Bookcase({
           <div className="bookcase-container">
             {(["mine", "shared", "senpai"] as Shelf[]).map((shelfKey) => {
               const booksHere = books.filter((b) => b.shelf === shelfKey);
+              const ROW_CAPACITY = 8;
               const rows: JSX.Element[][] = [[], [], []];
-              booksHere.forEach((b, i) => rows[i % 3].push(spine(b, hasFilter && !matches(b))));
+              let rowIndex = 0;
+              booksHere.forEach((b) => {
+                if (rows[rowIndex].length >= ROW_CAPACITY && rowIndex < 2) rowIndex++;
+                rows[rowIndex].push(spine(b, hasFilter && !matches(b)));
+              });
               if (shelfKey !== "senpai") {
                 rows[booksHere.length % 3].push(
                   <span key="new">{newBookButton(shelfKey)}</span>
