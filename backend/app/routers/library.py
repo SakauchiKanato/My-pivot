@@ -188,7 +188,7 @@ def get_my_timeline(
     Spotlight検索＆タイムライン用の高速エンドポイント。
     """
     query = (
-        select(Entry, Book.shelf)
+        select(Entry, Book.shelf, Book.title)
         .join(Book, Entry.book_id == Book.id)
         .where(Entry.author_id == user.id)
         .order_by(Entry.date.desc())
@@ -204,12 +204,15 @@ def get_my_timeline(
         {
             "id": entry.id,
             "bookId": entry.book_id,
+            "bookTitle": book_title,
             "title": entry.title,
             "date": entry.date,
             "outcome": entry.outcome,
+            "judgment": entry.judgment,
+            "confidence": entry.confidence,
             "shelf": shelf,
         }
-        for entry, shelf in results
+        for entry, shelf, book_title in results
     ]
 
 

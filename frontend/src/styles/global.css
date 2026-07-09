@@ -85,15 +85,22 @@
   .bell-item b{display:block}
   .bell-item span{color:var(--muted);font-size:11px}
   .bell-empty{padding:16px 12px;font-size:12px;color:var(--muted)}
-  /* ---- 検索 ---- */
   .search-panel{
     max-width:1180px;
     margin:0 auto 26px;
-    display:grid;
-    grid-template-columns:minmax(240px,1fr) auto;
+    display:flex;
+    flex-direction:column;
     gap:12px;
-    align-items:start;
+    align-items:stretch;
     transition:opacity .3s ease, transform .3s ease, max-height .3s ease;
+  }
+  .search-top{
+    display:flex;
+    gap:12px;
+    align-items:center;
+  }
+  .search-top .searchbox{
+    flex:1;
   }
   .search-panel.hidden{
     opacity:0;max-height:0;transform:translateY(-10px);
@@ -105,6 +112,15 @@
   }
   .searchbox span{font-size:16px}
   .searchbox input{width:100%;border:0;outline:0;font-size:14px;color:var(--ink)}
+  .filter-scroll{
+    display:flex;overflow-x:auto;white-space:nowrap;gap:16px;
+    padding-bottom:8px;margin-bottom:0;-webkit-overflow-scrolling:touch;
+  }
+  .filter-scroll::-webkit-scrollbar{height:4px}
+  .filter-scroll::-webkit-scrollbar-thumb{background:var(--line);border-radius:2px}
+  .filter-group{display:flex;flex-direction:column;gap:4px}
+  .filter-label{font-size:10px;color:var(--muted);letter-spacing:1px}
+  .filter-chips{display:flex;gap:6px}
   .chips{display:flex;flex-wrap:wrap;gap:8px}
   .chip,.plain,.icon-btn{
     border:1px solid var(--line);background:#fff;color:var(--ink);
