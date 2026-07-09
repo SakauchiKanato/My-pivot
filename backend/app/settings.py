@@ -97,3 +97,12 @@ BIAS_CHECK_ENABLED = _bool("BIAS_CHECK_ENABLED", True)
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "")
 GEMINI_MODEL = os.environ.get("GEMINI_MODEL", "gemini-2.5-flash")
 BIAS_CHECK_TIMEOUT_SECONDS = float(os.environ.get("BIAS_CHECK_TIMEOUT_SECONDS", "12"))
+
+# ============================================================
+# タグ・カテゴリの自動マッピング(LLMフォールバック)
+# ============================================================
+# ルールベース辞書(tag_mapper.TAG_RULES)にないタグだけをGeminiに分類させる。
+# 分類はTag新規作成時に1回だけ(以後はDBのカテゴリを再利用)。
+# キー未設定・障害時は従来どおり「その他」になる。
+TAG_LLM_ENABLED = _bool("TAG_LLM_ENABLED", True)
+TAG_LLM_TIMEOUT_SECONDS = float(os.environ.get("TAG_LLM_TIMEOUT_SECONDS", "6"))
