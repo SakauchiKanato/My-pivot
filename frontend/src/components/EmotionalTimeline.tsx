@@ -7,9 +7,12 @@ import { fetchMyTimeline } from '../lib/api';
 interface TimelineEntry {
   id: number;
   bookId: number;
+  bookTitle?: string;
   title: string;
   date: string;
   outcome: 'ok' | 'ng' | 'pending';
+  judgment: 'sound' | 'flawed' | null;
+  confidence: number | null;
   shelf: 'mine' | 'shared' | 'senpai';
 }
 
@@ -295,6 +298,13 @@ const TimelineItem: React.FC<{
           {entry.date}
         </div>
 
+        {/* 書籍タイトル */}
+        {entry.bookTitle && (
+          <div style={{ fontSize: 13, color: '#d6d3d1', marginBottom: 8, fontStyle: 'italic' }}>
+            📖 {entry.bookTitle}
+          </div>
+        )}
+
         {/* タイトル */}
         <h3 style={{
           margin: '0 0 16px 0',
@@ -361,6 +371,13 @@ export const EmotionalTimeline: React.FC<{
   const listRef = useRef<HTMLDivElement>(null);
   const [listHeight, setListHeight] = useState(0);
 
+  // Filters
+  const [filterShelves, setFilterShelves] = useState<string[]>([]);
+  const [filterOutcomes, setFilterOutcomes] = useState<string[]>([]);
+  const [filterJudgments, setFilterJudgments] = useState<string[]>([]);
+  const [filterConfidences, setFilterConfidences] = useState<string[]>([]);
+  const [filterTime, setFilterTime] = useState<string>('all'); // 'all', '3m', '1y', 'older'
+
   useEffect(() => {
     const fetchTimeline = async () => {
       try {
@@ -377,11 +394,45 @@ export const EmotionalTimeline: React.FC<{
     fetchTimeline();
   }, []);
 
+  const filteredEntries = entries.filter(e => {
+    // Shelf filter
+    if (filterShelves.length > 0 && !filterShelves.includes(e.shelf)) return false;
+
+    // Outcome filter
+    if (filterOutcomes.length > 0 && !filterOutcomes.includes(e.outcome || "pending")) return false;
+
+    // Judgment filter
+    if (filterJudgments.length > 0 && !filterJudgments.includes(e.judgment || "none")) return false;
+
+    // Confidence filter
+    if (filterConfidences.length > 0) {
+      const conf = e.confidence || 3;
+      let ok = false;
+      if (filterConfidences.includes("high") && conf >= 4) ok = true;
+      if (filterConfidences.includes("mid") && conf === 3) ok = true;
+      if (filterConfidences.includes("low") && conf <= 2) ok = true;
+      if (!ok) return false;
+    }
+
+    // Time filter
+    if (filterTime !== 'all' && e.date) {
+      const d = new Date(e.date);
+      const now = new Date();
+      const diffMonths = (now.getFullYear() - d.getFullYear()) * 12 + (now.getMonth() - d.getMonth());
+      
+      if (filterTime === '3m' && diffMonths > 3) return false;
+      if (filterTime === '1y' && diffMonths > 12) return false;
+      if (filterTime === 'older' && diffMonths <= 12) return false;
+    }
+
+    return true;
+  });
+
   useEffect(() => {
     if (listRef.current) {
       setListHeight(listRef.current.scrollHeight);
     }
-  }, [entries]);
+  }, [filteredEntries]);
 
   const triggerAchievement = useCallback(() => {
     confetti({
@@ -448,7 +499,7 @@ export const EmotionalTimeline: React.FC<{
           </motion.button>
 
           {/* タイトル */}
-          <div style={{ textAlign: 'center', marginBottom: 64 }}>
+          <div style={{ textAlign: 'center', marginBottom: 32 }}>
             <motion.div
               initial={{ opacity: 0, y: -16 }}
               animate={{ opacity: 1, y: 0 }}
@@ -487,6 +538,80 @@ export const EmotionalTimeline: React.FC<{
             </motion.p>
           </div>
 
+          {/* フィルターUI */}
+          <div style={{ marginBottom: 40, background: 'rgba(25, 20, 15, 0.4)', padding: '16px', borderRadius: '12px', border: '1px solid rgba(139,90,43,0.2)' }}>
+            <div className="filter-scroll" style={{ marginBottom: 0 }}>
+              <div className="filter-group">
+                <span className="filter-label" style={{ color: '#a39587' }}>書庫</span>
+                <div className="filter-chips">
+                  {(["mine", "shared", "senpai"] as const).map(s => (
+                    <button
+                      key={s}
+                      type="button"
+                      style={{ background: filterShelves.includes(s) ? '#d4c2aa' : 'transparent', color: filterShelves.includes(s) ? '#1a1510' : '#d4c2aa', borderColor: filterShelves.includes(s) ? '#d4c2aa' : 'rgba(212,194,170,0.3)' }}
+                      className="chip"
+                      onClick={() => setFilterShelves(cur => cur.includes(s) ? cur.filter(x => x !== s) : [...cur, s])}
+                    >
+                      {s === 'mine' ? 'わたし' : s === 'shared' ? '共同' : '先達'}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="filter-group">
+                <span className="filter-label" style={{ color: '#a39587' }}>期間</span>
+                <div className="filter-chips">
+                  {['all', '3m', '1y', 'older'].map(t => (
+                    <button
+                      key={t}
+                      type="button"
+                      style={{ background: filterTime === t ? '#d4c2aa' : 'transparent', color: filterTime === t ? '#1a1510' : '#d4c2aa', borderColor: filterTime === t ? '#d4c2aa' : 'rgba(212,194,170,0.3)' }}
+                      className="chip"
+                      onClick={() => setFilterTime(t)}
+                    >
+                      {t === 'all' ? 'すべて' : t === '3m' ? '過去3ヶ月' : t === '1y' ? '過去1年' : '1年以上前'}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="filter-group">
+                <span className="filter-label" style={{ color: '#a39587' }}>決断の結果</span>
+                <div className="filter-chips">
+                  {['ok', 'ng', 'pending'].map(o => (
+                    <button
+                      key={o}
+                      type="button"
+                      style={{ background: filterOutcomes.includes(o) ? '#d4c2aa' : 'transparent', color: filterOutcomes.includes(o) ? '#1a1510' : '#d4c2aa', borderColor: filterOutcomes.includes(o) ? '#d4c2aa' : 'rgba(212,194,170,0.3)' }}
+                      className="chip"
+                      onClick={() => setFilterOutcomes(cur => cur.includes(o) ? cur.filter(x => x !== o) : [...cur, o])}
+                    >
+                      {o === 'ok' ? 'うまくいった' : o === 'ng' ? '後悔が残る' : '結果待ち'}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="filter-group">
+                <span className="filter-label" style={{ color: '#a39587' }}>当時の自信</span>
+                <div className="filter-chips">
+                  <button
+                    type="button"
+                    style={{ background: filterConfidences.includes('high') ? '#d4c2aa' : 'transparent', color: filterConfidences.includes('high') ? '#1a1510' : '#d4c2aa', borderColor: filterConfidences.includes('high') ? '#d4c2aa' : 'rgba(212,194,170,0.3)' }}
+                    className="chip"
+                    onClick={() => setFilterConfidences(cur => cur.includes("high") ? cur.filter(x => x !== "high") : [...cur, "high"])}
+                  >自信あり</button>
+                  <button
+                    type="button"
+                    style={{ background: filterConfidences.includes('low') ? '#d4c2aa' : 'transparent', color: filterConfidences.includes('low') ? '#1a1510' : '#d4c2aa', borderColor: filterConfidences.includes('low') ? '#d4c2aa' : 'rgba(212,194,170,0.3)' }}
+                    className="chip"
+                    onClick={() => setFilterConfidences(cur => cur.includes("low") ? cur.filter(x => x !== "low") : [...cur, "low"])}
+                  >自信なし</button>
+                </div>
+              </div>
+            </div>
+          </div>
+
           {/* タイムラインリスト */}
           {loading ? (
             <div style={{ textAlign: 'center', color: '#78716c', padding: '48px 0' }}>
@@ -499,16 +624,16 @@ export const EmotionalTimeline: React.FC<{
               </motion.div>
               <p style={{ marginTop: 12 }}>記憶の樹脈を読み込み中...</p>
             </div>
-          ) : entries.length === 0 ? (
+          ) : filteredEntries.length === 0 ? (
             <div style={{ textAlign: 'center', color: '#78716c', padding: '48px 0' }}>
               <div style={{ fontSize: 48, marginBottom: 16 }}>🌱</div>
-              <p>まだ記録がありません。最初の決断を刻みましょう。</p>
+              <p>表示できる記録がありません。</p>
             </div>
           ) : (
             <div ref={listRef} style={{ position: 'relative', paddingLeft: 28 }}>
               {/* SVG有機的な幹 */}
               {listHeight > 0 && <OrganicTrunk height={listHeight} />}
-              {entries.map((entry, idx) => (
+              {filteredEntries.map((entry, idx) => (
                 <TimelineItem
                   key={entry.id}
                   entry={entry}
