@@ -138,6 +138,12 @@ export const publishEntry = (
 export const fetchDue = () => req<Entry[]>("/api/notifications/due");
 export const fetchCalibration = () => req<CalibrationStats>("/api/stats/calibration");
 
+export const fetchMyTimeline = (limit: number = 30, search: string = "") => {
+  let url = `/api/entries/me/timeline?limit=${limit}`;
+  if (search) url += `&search=${encodeURIComponent(search)}`;
+  return req<any[]>(url);
+};
+
 // --- 召喚(意味検索・AI候補A) ---
 // available=false のときは呼び出し側が bigram 一致にフォールバックする。
 // サーバーは entryId とスコアしか返さない(本文は手元の生データを表示する)。

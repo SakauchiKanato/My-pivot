@@ -14,6 +14,7 @@
  */
 
 import { useEffect, useMemo, useState } from "react";
+import { motion } from "framer-motion";
 
 import type { Book, Entry } from "../../lib/api";
 import { useSemanticRecall } from "../../lib/recall";
@@ -121,7 +122,12 @@ export type WriteForm = ReturnType<typeof useWriteForm>;
 /** 左ページ:導入文 + 本文 + recall(似た過去の記録) */
 export function WriteSectionLeft({ form }: { form: WriteForm }) {
   return (
-    <>
+    <motion.div
+      initial={{ opacity: 0, y: 8, filter: "blur(2px)" }}
+      animate={{ opacity: 1, y: 0, filter: "blur(0px)" }}
+      transition={{ duration: 0.5, ease: [0.25, 0.1, 0.25, 1] }}
+      style={{ position: "relative" }}
+    >
       <h2>この本に書く</h2>
       <p className="hint">
         綺麗に書かなくていい。ここに書いた「決定時のあなた」は、綴じた後は書き換えられません(追記はできます)—
@@ -148,7 +154,7 @@ export function WriteSectionLeft({ form }: { form: WriteForm }) {
           </>
         )}
       </div>
-    </>
+    </motion.div>
   );
 }
 
