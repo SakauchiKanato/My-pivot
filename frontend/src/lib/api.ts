@@ -51,6 +51,8 @@ export interface Book {
 
 export interface Library {
   books: Book[];
+  // タグ名→カテゴリ(感情/研究/…)。チップのカテゴリ折りたたみ表示に使う
+  tagCategories: Record<string, string>;
   flags: ServerFlags;
 }
 

@@ -468,3 +468,11 @@
 }
 .bias-ask .who{font-size:11px;color:var(--violet);letter-spacing:1.4px}
 .bias-ask p{margin:6px 0 8px;font-size:13px;line-height:1.9;color:#312c24}
+
+/* ---- タグチップのカテゴリ折りたたみ ---- */
+.chip-group{display:inline-flex;flex-wrap:wrap;gap:6px;align-items:center;margin-right:10px}
+.chip.cat{border-style:solid;border-color:var(--gold);letter-spacing:1px}
+.chip.cat .cat-n{
+  display:inline-block;margin-left:6px;padding:0 6px;border-radius:8px;
+  background:rgba(178,141,58,.15);font-size:10px;color:var(--gold);
+}

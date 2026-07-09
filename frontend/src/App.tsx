@@ -26,6 +26,7 @@ import type { WriteDraft } from "./components/spread/WriteSection";
 export default function App() {
   const [user, setUser] = useState<AuthUser | null>(getAuthUser());
   const [books, setBooks] = useState<Book[]>([]);
+  const [tagCategories, setTagCategories] = useState<Record<string, string>>({});
   const [serverFlags, setServerFlags] = useState<ServerFlags | null>(null);
   const [due, setDue] = useState<Entry[]>([]);
   const [stats, setStats] = useState<CalibrationStats | null>(null);
@@ -52,6 +53,7 @@ export default function App() {
         fetchCalibration(),
       ]);
       setBooks(lib.books);
+      setTagCategories(lib.tagCategories ?? {});
       setServerFlags(lib.flags);
       setDue(dueList);
       setStats(cal);
@@ -134,6 +136,7 @@ export default function App() {
 
       <Bookcase
         books={books}
+        tagCategories={tagCategories}
         overlayOpen={overlayOpen}
         onOpenBook={(b) => {
           setFocusEntryId(null);
