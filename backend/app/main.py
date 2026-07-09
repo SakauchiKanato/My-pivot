@@ -7,18 +7,25 @@ My Pivot バックエンド エントリーポイント(v3 UI 対応版)
 
 http://localhost:8000/docs で Swagger UI。
 """
+import threading
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from app import settings
 from app.database import create_db_and_tables
-from app.routers import auth, library, publish, insights
+from app.routers import auth, library, publish, insights, recall, bias
+from app.services import embeddings
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     create_db_and_tables()
+    if settings.RECALL_SEMANTIC_ENABLED:
+        # 起動をブロックしない。ロード完了までは /api/recall が
+        # available=false を返し、フロントは bigram にフォールバックする
+        threading.Thread(target=embeddings.warmup_and_backfill, daemon=True).start()
     yield
 
 
@@ -40,6 +47,8 @@ app.include_router(auth.router)
 app.include_router(library.router)
 app.include_router(publish.router)
 app.include_router(insights.router)
+app.include_router(recall.router)
+app.include_router(bias.router)
 
 
 @app.get("/")

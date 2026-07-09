@@ -11,6 +11,7 @@
  */
 import { useState } from "react";
 import type { Book, Entry } from "../../lib/api";
+import { apiBiasCheck } from "../../lib/api";
 import type { ServerFlags } from "../../config/flags";
 import { Badges } from "./Badges";
 
@@ -116,6 +117,9 @@ function TimelineCard(
   const [reasonOutcome, setReasonOutcome] = useState("");
   const [reasonJudgment, setReasonJudgment] = useState("");
   const [appendText, setAppendText] = useState("");
+  // 候補B: アウトカムバイアス検出。問いが返ったら綴じる前に一度だけ立ち止まる
+  const [biasQuestion, setBiasQuestion] = useState<string | null>(null);
+  const [biasChecking, setBiasChecking] = useState(false);
 
   const canPublish =
     props.publishEnabled &&
@@ -123,13 +127,31 @@ function TimelineCard(
     e.sourceEntryId == null &&
     (!props.serverFlags?.publishRequireResolved || isResolved(e));
 
-  const saveFlag = async () => {
+  const saveFlag = async (skipBiasCheck = false) => {
     if (!outcome) return;
     if (!judgment) {
       alert("「当時の判断」も選んでください。結果と判断は別のものです。");
       return;
     }
+    // 候補B: 綴じる前にアウトカムバイアスの検出を試みる。
+    // AIは断定せず問いを1つ返すだけで、綴じるのを妨げない。
+    // API未設定・障害時(available=false)や判定エラー時は素通しで綴じる。
+    if (!skipBiasCheck && reasonJudgment.trim()) {
+      setBiasChecking(true);
+      try {
+        const res = await apiBiasCheck(e.id, { outcome, judgment, reasonOutcome, reasonJudgment });
+        if (res.available && res.biasSuspected && res.question) {
+          setBiasQuestion(res.question);
+          setBiasChecking(false);
+          return; // まだ綴じない。問いに答えるかどうかはユーザーが決める
+        }
+      } catch {
+        /* 検出は綴じる動作を巻き添えにしない */
+      }
+      setBiasChecking(false);
+    }
     await props.onResolve(e.id, { outcome, judgment, reasonOutcome, reasonJudgment });
+    setBiasQuestion(null);
     props.closeForms();
   };
 
@@ -253,11 +275,34 @@ function TimelineCard(
                 className="small"
                 placeholder="あの時の自分の決め方は、どうだった?"
                 value={reasonJudgment}
-                onChange={(ev) => setReasonJudgment(ev.target.value)}
+                onChange={(ev) => {
+                  setReasonJudgment(ev.target.value);
+                  setBiasQuestion(null); // 書き直したら、もう一度検出を通す
+                }}
               />
-              <button className="plain dark" type="button" onClick={saveFlag}>
-                結果を綴じる
-              </button>
+              {biasQuestion ? (
+                <div className="bias-ask">
+                  <div className="who">― 綴じる前に、ひとつだけ</div>
+                  <p>{biasQuestion}</p>
+                  <div className="mini-actions">
+                    <button className="plain" type="button" onClick={() => setBiasQuestion(null)}>
+                      書き直す
+                    </button>
+                    <button className="plain dark" type="button" onClick={() => saveFlag(true)}>
+                      このまま綴じる
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <button
+                  className="plain dark"
+                  type="button"
+                  disabled={biasChecking}
+                  onClick={() => saveFlag()}
+                >
+                  {biasChecking ? "確認しています…" : "結果を綴じる"}
+                </button>
+              )}
             </>
           )}
         </div>

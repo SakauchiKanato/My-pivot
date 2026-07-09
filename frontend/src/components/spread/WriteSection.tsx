@@ -6,9 +6,9 @@
  * - B-2: 公開トグルは置かない(FLAGS.publishPostHocOnly)。公開は年表から。
  * - A-2: 召喚は現行 "box" 方式。FLAGS.recallStyle で差し替え予定の受け皿。
  */
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import type { Book, Entry } from "../../lib/api";
-import { bestRecall } from "../../lib/recall";
+import { useSemanticRecall } from "../../lib/recall";
 import { addMonthsISO, todayISO } from "../../lib/dates";
 import { Badges } from "./Badges";
 
@@ -43,11 +43,8 @@ export function WriteSection({ allEntries, books, initialDraft, onSave }: Props)
   const [resolveDate, setResolveDate] = useState("");
   const [status, setStatus] = useState("");
 
-  const recall = useMemo(() => {
-    const text = body.trim();
-    if (text.length < 12) return null;
-    return bestRecall(text, allEntries);
-  }, [body, allEntries]);
+  // 召喚: サーバーの意味検索(embedding)。使えないときは bigram に自動フォールバック
+  const recall = useSemanticRecall(body, allEntries);
 
   const recallBook = recall ? books.find((b) => b.id === recall.bookId) : null;
 

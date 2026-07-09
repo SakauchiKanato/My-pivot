@@ -30,6 +30,7 @@ from app.models import (
     Book, Entry, EntryAppend, Tag, Shelf, Outcome, Judgment, User, SharedMembership,
 )
 from app.services.tag_mapper import map_tag_to_category
+from app.services import embeddings
 from app.auth.deps import get_current_user
 
 router = APIRouter(prefix="/api", tags=["library"])
@@ -265,6 +266,12 @@ def create_entry(
     attach_tags(session, entry, data.tags)
     session.commit()
     session.refresh(entry)
+    # 意味検索用ベクトル(候補A)。モデル未ロードなら起動時/検索時に補完される。
+    # 失敗しても記録の保存は絶対に巻き添えにしない。
+    try:
+        embeddings.upsert_entry_embedding(session, entry)
+    except Exception as e:
+        print(f"[recall] ベクトル計算をスキップ: {e}")
     return serialize_entry(entry)
 
 
@@ -371,6 +378,10 @@ def withdraw_entry(
     for a in list(entry.appends):
         session.delete(a)
     entry.tags.clear()
+    from app.models import EntryEmbedding
+    emb_row = session.get(EntryEmbedding, entry.id)
+    if emb_row:
+        session.delete(emb_row)
     session.delete(entry)
     session.commit()
     return {"withdrawn": payload}

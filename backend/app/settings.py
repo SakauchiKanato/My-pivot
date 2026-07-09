@@ -7,6 +7,14 @@
 """
 import os
 
+# backend/.env があれば読み込む(GEMINI_API_KEY などの秘匿情報用。.envはgitignore済み)
+try:
+    from dotenv import load_dotenv
+
+    load_dotenv()
+except ImportError:
+    pass
+
 
 def _bool(key: str, default: bool) -> bool:
     v = os.environ.get(key)
@@ -55,3 +63,37 @@ PUBLISH_TO_SENPAI = _bool("PUBLISH_TO_SENPAI", False)
 
 # B-1: 個人→共同の片方向参照(引用リンク)。未実装スタブ。
 REFERENCE_LINKS_ENABLED = _bool("REFERENCE_LINKS_ENABLED", False)
+
+# ============================================================
+# AI候補A: 召喚の意味検索(embedding)
+# ============================================================
+# 設計制約: T1(決定時)にAIは答えを出さない。これは検索であって生成ではない。
+# 読み出し専用なので confidence 汚染ゼロ。
+
+# 意味検索のON/OFF。fastembed 未インストールでも自動で無効化される
+RECALL_SEMANTIC_ENABLED = _bool("RECALL_SEMANTIC_ENABLED", True)
+
+# ローカル埋め込みモデル(fastembed/ONNX)。初回にHFから自動DL
+#   - "intfloat/multilingual-e5-large"(既定): ~2.2GB・日本語精度が高い
+#   - MiniLM: ~500MB・軽いが精度そこそこ(非力なマシン用)
+RECALL_MODEL = os.environ.get("RECALL_MODEL", "intfloat/multilingual-e5-large")
+
+# この類似度未満は「似た迷い」として出さない(0〜1)。
+# モデルによりスコア分布が違う: MiniLM系は0.4前後、e5系は0.8前後が目安
+_default_sim = "0.8" if "e5" in RECALL_MODEL.lower() else "0.4"
+RECALL_MIN_SIMILARITY = float(os.environ.get("RECALL_MIN_SIMILARITY", _default_sim))
+
+# ============================================================
+# AI候補B: アウトカムバイアス検出(T2: 結果を綴じるとき)
+# ============================================================
+# 設計制約: AIは断定しない。バイアスの疑いがあるときに「問い」を1つ返すだけ。
+# 綴じるのを妨げない(ユーザーは問いを無視してそのまま綴じられる)。
+# 決定時の記録(entry.body)が不変だから「当時知り得た情報」との照合が成立する。
+
+BIAS_CHECK_ENABLED = _bool("BIAS_CHECK_ENABLED", True)
+
+# Gemini API。キー未設定なら機能は自動で無効(綴じる動作には影響しない)
+# キーは backend/.env に書くこと。コードに直書きするとGitHubにpushできない(Push Protection)
+GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "")
+GEMINI_MODEL = os.environ.get("GEMINI_MODEL", "gemini-2.5-flash")
+BIAS_CHECK_TIMEOUT_SECONDS = float(os.environ.get("BIAS_CHECK_TIMEOUT_SECONDS", "12"))

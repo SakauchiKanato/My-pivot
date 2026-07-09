@@ -3,3 +3,5 @@ uvicorn[standard]>=0.29
 sqlmodel>=0.0.16
 bcrypt>=4.0
 python-jose[cryptography]>=3.3
+# AI候補A: 召喚の意味検索(ローカル埋め込み)。初回起動時にモデルを自動DL(~500MB)
+fastembed>=0.7
