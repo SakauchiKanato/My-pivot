@@ -6,8 +6,8 @@
 
 設計方針（過去の議論を反映）：
 - まずルールベースで確実に動かす（無料・高速・予測可能）
-- 将来 LLM を足す場合は、辞書に無いタグだけをフォールバックで LLM に渡す
-  → llm_mapper.py に切り出し可能な設計にしている
+- 辞書に無いタグだけをフォールバックで LLM に渡す（llm_mapper.py・実装済み）
+  LLM が使えない環境では従来どおり「その他」になる
 """
 
 # タグ → カテゴリ のマッピング辞書
@@ -43,9 +43,12 @@ def map_tag_to_category(tag_name: str) -> str:
             if keyword.lower() in normalized:
                 return category
 
-    # --- ここで将来 LLM フォールバックを呼べる ---
-    # if USE_LLM:
-    #     return llm_mapper.classify(tag_name)
+    # 辞書にないタグだけ LLM に聞く(Tag新規作成時の1回だけ呼ばれる)
+    from app.services import llm_mapper
+
+    llm_category = llm_mapper.classify(normalized)
+    if llm_category:
+        return llm_category
 
     return DEFAULT_CATEGORY
 

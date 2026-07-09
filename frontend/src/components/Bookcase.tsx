@@ -38,8 +38,13 @@ function bookText(book: Book): string {
   return txt.toLowerCase();
 }
 
+// カテゴリの表示順(tag_mapper.TAG_RULES と対応)。「その他」は最後
+const CATEGORY_ORDER = ["感情", "意思決定", "研究", "学習", "人間関係", "成長", "その他"];
+
 interface Props {
   books: Book[];
+  // タグ名→カテゴリ(バックエンドのLLM分類結果)。チップの折りたたみに使う
+  tagCategories: Record<string, string>;
   onOpenBook: (book: Book) => void;
   onCreateBook: (shelf: Shelf, title: string) => void;
   onCreateSharedBook: (title: string, passcode: string) => Promise<void>;
@@ -49,6 +54,7 @@ interface Props {
 
 export function Bookcase({
   books,
+  tagCategories,
   onOpenBook,
   onCreateBook,
   onCreateSharedBook,
@@ -57,6 +63,7 @@ export function Bookcase({
 }: Props) {
   const [query, setQuery] = useState("");
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
+  const [openCats, setOpenCats] = useState<string[]>([]);
   const [sharedModalOpen, setSharedModalOpen] = useState(false);
 
   const allTags = useMemo(() => {
@@ -64,6 +71,23 @@ export function Bookcase({
     books.forEach((b) => bookTags(b).forEach((t) => !tags.includes(t) && tags.push(t)));
     return tags.sort();
   }, [books]);
+
+  // タグをカテゴリ単位でまとめる。タグ名(ユーザーの言葉)は書き換えない
+  const groupedTags = useMemo(() => {
+    const groups = new Map<string, string[]>();
+    allTags.forEach((tag) => {
+      const cat = tagCategories[tag] ?? "その他";
+      if (!groups.has(cat)) groups.set(cat, []);
+      groups.get(cat)!.push(tag);
+    });
+    return [...groups.entries()]
+      .map(([category, tags]) => ({ category, tags }))
+      .sort((a, b) => {
+        const ia = CATEGORY_ORDER.indexOf(a.category);
+        const ib = CATEGORY_ORDER.indexOf(b.category);
+        return (ia === -1 ? 99 : ia) - (ib === -1 ? 99 : ib);
+      });
+  }, [allTags, tagCategories]);
 
   const hasFilter = selectedTags.length > 0 || query.trim().length > 0;
 
@@ -122,20 +146,44 @@ export function Bookcase({
         </label>
         <div>
           <div className="chips">
-            {allTags.map((tag) => (
-              <button
-                key={tag}
-                type="button"
-                className={`chip${selectedTags.includes(tag) ? " active" : ""}`}
-                onClick={() =>
-                  setSelectedTags((cur) =>
-                    cur.includes(tag) ? cur.filter((t) => t !== tag) : [...cur, tag]
-                  )
-                }
-              >
-                #{tag}
-              </button>
-            ))}
+            {groupedTags.map(({ category, tags }) => {
+              const selectedN = tags.filter((t) => selectedTags.includes(t)).length;
+              // 選択中のタグを含むカテゴリは自動で開いておく
+              const isOpen = openCats.includes(category) || selectedN > 0;
+              return (
+                <div className="chip-group" key={category}>
+                  <button
+                    type="button"
+                    className={`chip cat${selectedN > 0 ? " active" : ""}`}
+                    onClick={() =>
+                      setOpenCats((cur) =>
+                        cur.includes(category)
+                          ? cur.filter((c) => c !== category)
+                          : [...cur, category]
+                      )
+                    }
+                  >
+                    {isOpen ? "▾" : "▸"} {category}
+                    <span className="cat-n">{selectedN > 0 ? `${selectedN}/${tags.length}` : tags.length}</span>
+                  </button>
+                  {isOpen &&
+                    tags.map((tag) => (
+                      <button
+                        key={tag}
+                        type="button"
+                        className={`chip${selectedTags.includes(tag) ? " active" : ""}`}
+                        onClick={() =>
+                          setSelectedTags((cur) =>
+                            cur.includes(tag) ? cur.filter((t) => t !== tag) : [...cur, tag]
+                          )
+                        }
+                      >
+                        #{tag}
+                      </button>
+                    ))}
+                </div>
+              );
+            })}
           </div>
           <button
             className="plain"

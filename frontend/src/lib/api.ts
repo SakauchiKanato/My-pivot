@@ -51,6 +51,8 @@ export interface Book {
 
 export interface Library {
   books: Book[];
+  // タグ名→カテゴリ(感情/研究/…)。チップのカテゴリ折りたたみ表示に使う
+  tagCategories: Record<string, string>;
   flags: ServerFlags;
 }
 
@@ -135,3 +137,31 @@ export const publishEntry = (
 // --- 通知・計器 ---
 export const fetchDue = () => req<Entry[]>("/api/notifications/due");
 export const fetchCalibration = () => req<CalibrationStats>("/api/stats/calibration");
+
+// --- 召喚(意味検索・AI候補A) ---
+// available=false のときは呼び出し側が bigram 一致にフォールバックする。
+// サーバーは entryId とスコアしか返さない(本文は手元の生データを表示する)。
+export interface RecallHit {
+  entryId: number;
+  score: number;
+}
+export interface RecallResponse {
+  available: boolean;
+  results: RecallHit[];
+  minSimilarity: number;
+}
+export const apiRecall = (text: string, limit = 3) =>
+  post<RecallResponse>("/api/recall", { text, limit });
+
+// --- アウトカムバイアス検出(候補B・T2) ---
+// 結果を綴じる「前」に呼ぶ。疑いがあれば question に「問い」が入る。
+// available=false(APIキー未設定・障害)のときは何も表示せず普通に綴じる。
+export interface BiasCheckResponse {
+  available: boolean;
+  biasSuspected: boolean;
+  question: string | null;
+}
+export const apiBiasCheck = (
+  entryId: number,
+  data: { outcome: "ok" | "ng"; judgment: "sound" | "flawed"; reasonOutcome: string; reasonJudgment: string }
+) => post<BiasCheckResponse>(`/api/entries/${entryId}/bias-check`, data);

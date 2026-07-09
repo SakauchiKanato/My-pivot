@@ -12,9 +12,11 @@
  * (タイトル・タグ・確信度・日付・保存)に分割。
  * BookOverlay 側で見開きの左右ページにそれぞれ差し込む想定。
  */
+
 import { useEffect, useMemo, useState } from "react";
+
 import type { Book, Entry } from "../../lib/api";
-import { bestRecall } from "../../lib/recall";
+import { useSemanticRecall } from "../../lib/recall";
 import { addMonthsISO, todayISO } from "../../lib/dates";
 import { Badges } from "./Badges";
 
@@ -49,6 +51,7 @@ export function useWriteForm({ allEntries, books, initialDraft, onSave }: UseWri
   const [resolveDate, setResolveDate] = useState("");
   const [status, setStatus] = useState("");
 
+
   // initialDraft が(onFix経由などで)新しく渡されたら、フォームに反映する。
   // 以前は key={} での再マウントで実現していたが、hook を左右ページで
   // 共有する都合上、明示的な同期に変更。
@@ -66,6 +69,7 @@ export function useWriteForm({ allEntries, books, initialDraft, onSave }: UseWri
     if (text.length < 12) return null;
     return bestRecall(text, allEntries);
   }, [body, allEntries]);
+
 
   const recallBook = recall ? books.find((b) => b.id === recall.bookId) : null;
 
