@@ -460,3 +460,11 @@
 .pub-line.removed span{text-decoration:line-through;color:#b7b2a6}
 .badge.pub{border-color:rgba(48,95,143,.4);color:var(--blue)}
 .loading-screen{min-height:100vh;display:flex;align-items:center;justify-content:center;color:var(--muted);font-size:13px;letter-spacing:2px}
+
+/* ---- 候補B: アウトカムバイアス検出の問い返し ---- */
+.bias-ask{
+  margin-top:10px;border-left:3px solid var(--violet);background:#fffaf0;
+  padding:12px 14px;
+}
+.bias-ask .who{font-size:11px;color:var(--violet);letter-spacing:1.4px}
+.bias-ask p{margin:6px 0 8px;font-size:13px;line-height:1.9;color:#312c24}
