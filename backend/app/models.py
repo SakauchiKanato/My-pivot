@@ -76,7 +76,13 @@ class Tag(SQLModel, table=True):
     entries: List["Entry"] = Relationship(back_populates="tags", link_model=EntryTagLink)
 
 
+from sqlalchemy import Index
+
 class Entry(SQLModel, table=True):
+    __table_args__ = (
+        Index("ix_entry_author_date", "author_id", "date", postgresql_using="btree"),
+        Index("ix_entry_title_body_gin", "title", "body", postgresql_using="gin", postgresql_ops={"title": "gin_trgm_ops", "body": "gin_trgm_ops"}),
+    )
     id: Optional[int] = Field(default=None, primary_key=True)
     book_id: int = Field(foreign_key="book.id", index=True)
     author_id: Optional[int] = Field(default=None, foreign_key="user.id", index=True)
