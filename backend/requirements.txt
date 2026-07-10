@@ -3,3 +3,5 @@ uvicorn[standard]>=0.29
 sqlmodel>=0.0.16
 bcrypt>=4.0
 python-jose[cryptography]>=3.3
+requests>=2.31
+python-dotenv>=1.0
