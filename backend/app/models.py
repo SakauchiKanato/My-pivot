@@ -76,7 +76,13 @@ class Tag(SQLModel, table=True):
     entries: List["Entry"] = Relationship(back_populates="tags", link_model=EntryTagLink)
 
 
+from sqlalchemy import Index
+
 class Entry(SQLModel, table=True):
+    __table_args__ = (
+        Index("ix_entry_author_date", "author_id", "date", postgresql_using="btree"),
+        Index("ix_entry_title_body_gin", "title", "body", postgresql_using="gin", postgresql_ops={"title": "gin_trgm_ops", "body": "gin_trgm_ops"}),
+    )
     id: Optional[int] = Field(default=None, primary_key=True)
     book_id: int = Field(foreign_key="book.id", index=True)
     author_id: Optional[int] = Field(default=None, foreign_key="user.id", index=True)
@@ -103,6 +109,20 @@ class Entry(SQLModel, table=True):
     appends: List["EntryAppend"] = Relationship(back_populates="entry")
 
 
+class EntryEmbedding(SQLModel, table=True):
+    """
+    召喚の意味検索(候補A)用の文埋め込みベクトル。
+
+    - 読み出し専用の派生データ。Entry本体には一切書き込まない
+    - vector は float32 リトルエンディアンを詰めた BLOB
+    - model が現行設定と違う行は「古い」とみなして再計算される
+    """
+    entry_id: Optional[int] = Field(default=None, foreign_key="entry.id", primary_key=True)
+    model: str = Field(default="")
+    dim: int = Field(default=0)
+    vector: bytes = Field(default=b"")
+
+
 class EntryAppend(SQLModel, table=True):
     """追記。原本は書き換えず、日付つきで下に重ねる。"""
     id: Optional[int] = Field(default=None, primary_key=True)
@@ -112,3 +132,22 @@ class EntryAppend(SQLModel, table=True):
     text: str
 
     entry: Optional[Entry] = Relationship(back_populates="appends")
+
+
+class BiasCheck(SQLModel, table=True):
+    """
+    アウトカムバイアス検出(候補B)の介入ログ。
+
+    「AIが問いを出したか」を記録しておくことで、介入あり/なしで
+    後のキャリブレーションを比較できる(製品自身が実験装置になる)。
+    checked_reason は判定対象になった reasonJudgment のスナップショット。
+    """
+    id: Optional[int] = Field(default=None, primary_key=True)
+    entry_id: int = Field(foreign_key="entry.id", index=True)
+    user_id: Optional[int] = Field(default=None, foreign_key="user.id")
+    judgment: str = Field(default="")
+    checked_reason: str = Field(default="")
+    bias_suspected: bool = Field(default=False)
+    question: str = Field(default="")
+    llm_model: str = Field(default="")
+    created_at: datetime = Field(default_factory=datetime.now)

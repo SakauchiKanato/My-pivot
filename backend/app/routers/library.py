@@ -30,6 +30,7 @@ from app.models import (
     Book, Entry, EntryAppend, Tag, Shelf, Outcome, Judgment, User, SharedMembership,
 )
 from app.services.tag_mapper import map_tag_to_category
+from app.services import embeddings
 from app.auth.deps import get_current_user
 
 router = APIRouter(prefix="/api", tags=["library"])
@@ -113,7 +114,24 @@ def assert_writable(session: Session, book: Book, user: User):
         raise HTTPException(403, "この共同の書架には参加していません")
 
 
-def attach_tags(session: Session, entry: Entry, tag_names: List[str]):
+def precompute_tag_categories(session: Session, tag_names: List[str]) -> dict:
+    """
+    新規タグのカテゴリを先に決めておく(LLM呼び出しを含むため、
+    entryをsessionに載せる前=書き込みトランザクションの外で呼ぶこと。
+    トランザクション中にLLMを待つとSQLiteのロックを長時間握ってしまう)。
+    """
+    categories = {}
+    for raw in tag_names:
+        name = raw.lstrip("#").strip()
+        if not name:
+            continue
+        existing = session.exec(select(Tag).where(Tag.name == name)).first()
+        if not existing:
+            categories[name] = map_tag_to_category(name)
+    return categories
+
+
+def attach_tags(session: Session, entry: Entry, tag_names: List[str], categories: dict):
     for raw in tag_names:
         name = raw.lstrip("#").strip()
         if not name:
@@ -122,7 +140,7 @@ def attach_tags(session: Session, entry: Entry, tag_names: List[str]):
         if existing:
             entry.tags.append(existing)
         else:
-            entry.tags.append(Tag(name=name, category=map_tag_to_category(name)))
+            entry.tags.append(Tag(name=name, category=categories.get(name, "その他")))
 
 
 def add_months_iso(base_iso: str, months: int) -> str:
@@ -142,8 +160,12 @@ def get_library(
     user: User = Depends(get_current_user),
 ):
     books = visible_books(session, user)
+    all_tags = session.exec(select(Tag)).all()
     return {
         "books": [serialize_book(b, list(b.entries), viewer_id=user.id) for b in books],
+        # タグ名→カテゴリ(tag_mapper + LLMフォールバックの分類結果)。
+        # フロントのチップをカテゴリ単位で畳むために使う
+        "tagCategories": {t.name: t.category for t in all_tags},
         "flags": {
             "publishEnabled": settings.PUBLISH_ENABLED,
             "publishRequireResolved": settings.PUBLISH_REQUIRE_RESOLVED,
@@ -153,6 +175,46 @@ def get_library(
             "fixWindowSeconds": settings.FIX_WINDOW_SECONDS,
         },
     }
+
+# ---------- マイ・アクティビティ検索＆タイムライン ----------
+@router.get("/entries/me/timeline")
+def get_my_timeline(
+    limit: int = 50,
+    search: Optional[str] = None,
+    session: Session = Depends(get_session),
+    user: User = Depends(get_current_user),
+):
+    """
+    Spotlight検索＆タイムライン用の高速エンドポイント。
+    """
+    query = (
+        select(Entry, Book.shelf, Book.title)
+        .join(Book, Entry.book_id == Book.id)
+        .where(Entry.author_id == user.id)
+        .order_by(Entry.date.desc())
+    )
+
+    if search:
+        query = query.where(Entry.title.ilike(f"%{search}%") | Entry.body.ilike(f"%{search}%"))
+    
+    query = query.limit(limit)
+    results = session.exec(query).all()
+        
+    return [
+        {
+            "id": entry.id,
+            "bookId": entry.book_id,
+            "bookTitle": book_title,
+            "title": entry.title,
+            "date": entry.date,
+            "outcome": entry.outcome,
+            "judgment": entry.judgment,
+            "confidence": entry.confidence,
+            "shelf": shelf,
+        }
+        for entry, shelf, book_title in results
+    ]
+
 
 
 # ---------- 合言葉で既存の共同の書架に参加する ----------
@@ -251,6 +313,8 @@ def create_entry(
         raise HTTPException(400, "本文を書いてから綴じられます")
     today = date.today().isoformat()
     resolve = data.resolveDate or add_months_iso(today, settings.PENDING_DEFAULT_MONTHS)
+    # LLMを使うタグ分類はトランザクションの外で先に済ませる(DBロック対策)
+    tag_categories = precompute_tag_categories(session, data.tags)
     entry = Entry(
         book_id=book.id,
         author_id=user.id,
@@ -262,9 +326,15 @@ def create_entry(
         resolve_date=resolve,
     )
     session.add(entry)
-    attach_tags(session, entry, data.tags)
+    attach_tags(session, entry, data.tags, tag_categories)
     session.commit()
     session.refresh(entry)
+    # 意味検索用ベクトル(候補A)。モデル未ロードなら起動時/検索時に補完される。
+    # 失敗しても記録の保存は絶対に巻き添えにしない。
+    try:
+        embeddings.upsert_entry_embedding(session, entry)
+    except Exception as e:
+        print(f"[recall] ベクトル計算をスキップ: {e}")
     return serialize_entry(entry)
 
 
@@ -371,6 +441,10 @@ def withdraw_entry(
     for a in list(entry.appends):
         session.delete(a)
     entry.tags.clear()
+    from app.models import EntryEmbedding
+    emb_row = session.get(EntryEmbedding, entry.id)
+    if emb_row:
+        session.delete(emb_row)
     session.delete(entry)
     session.commit()
     return {"withdrawn": payload}

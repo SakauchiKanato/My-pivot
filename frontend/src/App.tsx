@@ -22,10 +22,12 @@ import { Bookcase } from "./components/Bookcase";
 import { BookOverlay } from "./components/BookOverlay";
 import { CalibrationModal } from "./components/CalibrationModal";
 import type { WriteDraft } from "./components/spread/WriteSection";
+import { EmotionalTimeline } from "./components/EmotionalTimeline";
 
 export default function App() {
   const [user, setUser] = useState<AuthUser | null>(getAuthUser());
   const [books, setBooks] = useState<Book[]>([]);
+  const [tagCategories, setTagCategories] = useState<Record<string, string>>({});
   const [serverFlags, setServerFlags] = useState<ServerFlags | null>(null);
   const [due, setDue] = useState<Entry[]>([]);
   const [stats, setStats] = useState<CalibrationStats | null>(null);
@@ -36,6 +38,7 @@ export default function App() {
   const [startMode, setStartMode] = useState<"toc" | "timeline" | null>(null);
   const [focusEntryId, setFocusEntryId] = useState<number | null>(null);
   const [meterOpen, setMeterOpen] = useState(false);
+  const [timelineOpen, setTimelineOpen] = useState(false);
   const [toast, setToast] = useState("");
 
   const showToast = (msg: string) => {
@@ -52,6 +55,7 @@ export default function App() {
         fetchCalibration(),
       ]);
       setBooks(lib.books);
+      setTagCategories(lib.tagCategories ?? {});
       setServerFlags(lib.flags);
       setDue(dueList);
       setStats(cal);
@@ -129,11 +133,13 @@ export default function App() {
           setUser(null);
           setBooks([]);
         }}
+        onOpenTimeline={() => setTimelineOpen(true)}
       />
       {error && <div className="empty" style={{ maxWidth: 1180, margin: "0 auto 20px" }}>{error}</div>}
 
       <Bookcase
         books={books}
+        tagCategories={tagCategories}
         overlayOpen={overlayOpen}
         onOpenBook={(b) => {
           setFocusEntryId(null);
@@ -220,6 +226,18 @@ export default function App() {
       <div id="toast" className={toast ? "show" : ""} role="status">
         {toast}
       </div>
+
+      {timelineOpen && (
+        <EmotionalTimeline 
+          onClose={() => setTimelineOpen(false)} 
+          onOpenEntry={(bookId, entryId) => {
+            setFocusEntryId(entryId);
+            setStartMode("timeline");
+            setOpenBookId(bookId);
+            setTimelineOpen(false);
+          }}
+        />
+      )}
     </main>
   );
 }

@@ -12,9 +12,16 @@
  * (タイトル・タグ・確信度・日付・保存)に分割。
  * BookOverlay 側で見開きの左右ページにそれぞれ差し込む想定。
  */
+<<<<<<< HEAD
 import { useEffect, useMemo, useState } from "react";
+=======
+
+import { useEffect, useState } from "react";
+import { motion } from "framer-motion";
+
+>>>>>>> 6cc02f1164c905a7df9f7e8fef79aa49db5d1e89
 import type { Book, Entry } from "../../lib/api";
-import { bestRecall } from "../../lib/recall";
+import { useSemanticRecall } from "../../lib/recall";
 import { addMonthsISO, todayISO } from "../../lib/dates";
 import { Badges } from "./Badges";
 
@@ -49,6 +56,10 @@ export function useWriteForm({ allEntries, books, initialDraft, onSave }: UseWri
   const [resolveDate, setResolveDate] = useState("");
   const [status, setStatus] = useState("");
 
+<<<<<<< HEAD
+=======
+
+>>>>>>> 6cc02f1164c905a7df9f7e8fef79aa49db5d1e89
   // initialDraft が(onFix経由などで)新しく渡されたら、フォームに反映する。
   // 以前は key={} での再マウントで実現していたが、hook を左右ページで
   // 共有する都合上、明示的な同期に変更。
@@ -61,11 +72,17 @@ export function useWriteForm({ allEntries, books, initialDraft, onSave }: UseWri
     }
   }, [initialDraft]);
 
+<<<<<<< HEAD
   const recall = useMemo(() => {
     const text = body.trim();
     if (text.length < 12) return null;
     return bestRecall(text, allEntries);
   }, [body, allEntries]);
+=======
+  // 召喚: サーバーの意味検索(embedding)。使えないときは bigram に自動フォールバック
+  const recall = useSemanticRecall(body, allEntries);
+
+>>>>>>> 6cc02f1164c905a7df9f7e8fef79aa49db5d1e89
 
   const recallBook = recall ? books.find((b) => b.id === recall.bookId) : null;
 
@@ -117,7 +134,12 @@ export type WriteForm = ReturnType<typeof useWriteForm>;
 /** 左ページ:導入文 + 本文 + recall(似た過去の記録) */
 export function WriteSectionLeft({ form }: { form: WriteForm }) {
   return (
-    <>
+    <motion.div
+      initial={{ opacity: 0, y: 8, filter: "blur(2px)" }}
+      animate={{ opacity: 1, y: 0, filter: "blur(0px)" }}
+      transition={{ duration: 0.5, ease: [0.25, 0.1, 0.25, 1] }}
+      style={{ position: "relative" }}
+    >
       <h2>この本に書く</h2>
       <p className="hint">
         綺麗に書かなくていい。ここに書いた「決定時のあなた」は、綴じた後は書き換えられません(追記はできます)—
@@ -144,7 +166,11 @@ export function WriteSectionLeft({ form }: { form: WriteForm }) {
           </>
         )}
       </div>
+<<<<<<< HEAD
     </>
+=======
+    </motion.div>
+>>>>>>> 6cc02f1164c905a7df9f7e8fef79aa49db5d1e89
   );
 }
 

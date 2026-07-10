@@ -15,7 +15,11 @@ import { useEffect, useMemo, useState } from "react";
 import type { Book, Entry } from "../lib/api";
 import type { ServerFlags } from "../config/flags";
 import { FLAGS } from "../config/flags";
+<<<<<<< HEAD
 import { Badges } from "../components/spread/Badges.tsx";
+=======
+import { Badges } from "./spread/Badges";
+>>>>>>> 6cc02f1164c905a7df9f7e8fef79aa49db5d1e89
 import { useWriteForm, WriteSectionLeft, WriteSectionRight, type WriteDraft } from "./spread/WriteSection";
 import { TimelineSection } from "./spread/TimelineSection";
 
@@ -65,6 +69,10 @@ export function BookOverlay(props: Props) {
     },
   });
 
+<<<<<<< HEAD
+=======
+
+>>>>>>> 6cc02f1164c905a7df9f7e8fef79aa49db5d1e89
   // アニメーション段階: cover表示 → 開く → フリップ → 本文表示
   const [phase, setPhase] = useState<"init" | "cover" | "opening" | "flipping" | "ready">("init");
   const [closing, setClosing] = useState(false);
@@ -177,6 +185,10 @@ export function BookOverlay(props: Props) {
     />
   );
 
+<<<<<<< HEAD
+=======
+  /* A-1 分岐点: "past_present" 採用時はここを組み替える */
+>>>>>>> 6cc02f1164c905a7df9f7e8fef79aa49db5d1e89
   const isWriteSpread = mode === "write" && !readOnly;
 
   // 目次/書く/探す/年表: どのモードからでも移動できるよう左ページ上部に固定表示
@@ -328,6 +340,10 @@ export function BookOverlay(props: Props) {
             phase === "opening" || phase === "flipping" || phase === "ready" ? " show" : ""
           }${phase === "ready" ? " content-ready" : ""}`}
         >
+<<<<<<< HEAD
+=======
+
+>>>>>>> 6cc02f1164c905a7df9f7e8fef79aa49db5d1e89
           {leftPage}
           {rightPage}
           {/* ペラペラめくれる装飾ページ(実データの断片入り) */}

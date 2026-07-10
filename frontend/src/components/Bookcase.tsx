@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { motion } from "framer-motion";
 import type { Book, Shelf } from "../lib/api";
 import { SharedAccessModal } from "./SharedAccessModal";
 
@@ -38,8 +39,13 @@ function bookText(book: Book): string {
   return txt.toLowerCase();
 }
 
+// カテゴリの表示順(tag_mapper.TAG_RULES と対応)。「その他」は最後
+const CATEGORY_ORDER = ["感情", "意思決定", "研究", "学習", "人間関係", "成長", "その他"];
+
 interface Props {
   books: Book[];
+  // タグ名→カテゴリ(バックエンドのLLM分類結果)。チップの折りたたみに使う
+  tagCategories: Record<string, string>;
   onOpenBook: (book: Book) => void;
   onCreateBook: (shelf: Shelf, title: string) => void;
   onCreateSharedBook: (title: string, passcode: string) => Promise<void>;
@@ -49,6 +55,7 @@ interface Props {
 
 export function Bookcase({
   books,
+  tagCategories,
   onOpenBook,
   onCreateBook,
   onCreateSharedBook,
@@ -57,22 +64,86 @@ export function Bookcase({
 }: Props) {
   const [query, setQuery] = useState("");
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
+  const [openCats, setOpenCats] = useState<string[]>([]);
   const [sharedModalOpen, setSharedModalOpen] = useState(false);
+  const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
+
+  // 追加フィルター
+  const [filterShelves, setFilterShelves] = useState<Shelf[]>([]);
+  const [filterOutcomes, setFilterOutcomes] = useState<string[]>([]);
+  const [filterJudgments, setFilterJudgments] = useState<string[]>([]);
+  const [filterConfidences, setFilterConfidences] = useState<string[]>([]);
+
+  // パフォーマンス最適化：本のテキストとタグを事前に計算してキャッシュ
+  const bookCache = useMemo(() => {
+    const cache = new Map<number, { tags: string[], text: string }>();
+    books.forEach(b => {
+      cache.set(b.id, { tags: bookTags(b), text: bookText(b) });
+    });
+    return cache;
+  }, [books]);
 
   const allTags = useMemo(() => {
     const tags: string[] = [];
-    books.forEach((b) => bookTags(b).forEach((t) => !tags.includes(t) && tags.push(t)));
+    books.forEach((b) => {
+      const bTags = bookCache.get(b.id)?.tags || [];
+      bTags.forEach((t) => !tags.includes(t) && tags.push(t));
+    });
     return tags.sort();
-  }, [books]);
+  }, [books, bookCache]);
 
-  const hasFilter = selectedTags.length > 0 || query.trim().length > 0;
+  // タグをカテゴリ単位でまとめる。タグ名(ユーザーの言葉)は書き換えない
+  const groupedTags = useMemo(() => {
+    const groups = new Map<string, string[]>();
+    allTags.forEach((tag) => {
+      const cat = tagCategories[tag] ?? "その他";
+      if (!groups.has(cat)) groups.set(cat, []);
+      groups.get(cat)!.push(tag);
+    });
+    return [...groups.entries()]
+      .map(([category, tags]) => ({ category, tags }))
+      .sort((a, b) => {
+        const ia = CATEGORY_ORDER.indexOf(a.category);
+        const ib = CATEGORY_ORDER.indexOf(b.category);
+        return (ia === -1 ? 99 : ia) - (ib === -1 ? 99 : ib);
+      });
+  }, [allTags, tagCategories]);
+
+  const hasFilter = 
+    selectedTags.length > 0 || 
+    query.trim().length > 0 ||
+    filterShelves.length > 0 ||
+    filterOutcomes.length > 0 ||
+    filterJudgments.length > 0 ||
+    filterConfidences.length > 0;
 
   const matches = (book: Book) => {
-    const tags = bookTags(book);
-    const tagOk = selectedTags.every((t) => tags.includes(t));
+    const cached = bookCache.get(book.id);
+    const tags = cached?.tags || [];
+    const tagOk = selectedTags.length === 0 || selectedTags.every((t) => tags.includes(t));
     const q = query.trim().toLowerCase();
-    const wordOk = !q || bookText(book).includes(q);
-    return tagOk && wordOk;
+    const wordOk = !q || (cached?.text || "").includes(q);
+    
+    const shelfOk = filterShelves.length === 0 || filterShelves.includes(book.shelf);
+
+    let entryOk = true;
+    if (filterOutcomes.length > 0 || filterJudgments.length > 0 || filterConfidences.length > 0) {
+      // 指定された条件のいずれかを持つエントリが含まれていればOK（本全体が表示される）
+      entryOk = book.entries.some(e => {
+        const outOk = filterOutcomes.length === 0 || filterOutcomes.includes(e.outcome || "pending");
+        const judOk = filterJudgments.length === 0 || filterJudgments.includes(e.judgment || "none");
+        let confOk = filterConfidences.length === 0;
+        if (!confOk) {
+          const conf = e.confidence || 3;
+          if (filterConfidences.includes("high") && conf >= 4) confOk = true;
+          if (filterConfidences.includes("mid") && conf === 3) confOk = true;
+          if (filterConfidences.includes("low") && conf <= 2) confOk = true;
+        }
+        return outOk && judOk && confOk;
+      });
+    }
+
+    return tagOk && wordOk && shelfOk && entryOk;
   };
 
   const hits = hasFilter ? books.filter(matches) : [];
@@ -111,44 +182,163 @@ export function Bookcase({
   return (
     <>
       <section className={`search-panel${overlayOpen ? " hidden" : ""}`}>
-        <label className="searchbox">
-          <span>⌕</span>
-          <input
-            type="search"
-            placeholder="フリーワード検索: タイトル・タグ・本文から探す(3つの棚を横断)"
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-          />
-        </label>
-        <div>
-          <div className="chips">
-            {allTags.map((tag) => (
-              <button
-                key={tag}
-                type="button"
-                className={`chip${selectedTags.includes(tag) ? " active" : ""}`}
-                onClick={() =>
-                  setSelectedTags((cur) =>
-                    cur.includes(tag) ? cur.filter((t) => t !== tag) : [...cur, tag]
-                  )
-                }
-              >
-                #{tag}
-              </button>
-            ))}
-          </div>
+        <div className="search-top">
+          <label className="searchbox">
+            <span>⌕</span>
+            <input
+              type="search"
+              placeholder="フリーワード検索: タイトル・タグ・本文から探す(3つの棚を横断)"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+            />
+          </label>
           <button
             className="plain"
             type="button"
-            style={{ marginTop: 8 }}
+            onClick={() => setShowAdvancedFilters(!showAdvancedFilters)}
+          >
+            {showAdvancedFilters ? "▲ 閉じる" : "▼ 詳細条件"}
+          </button>
+          <button
+            className="plain"
+            type="button"
             onClick={() => {
               setSelectedTags([]);
               setQuery("");
+              setFilterShelves([]);
+              setFilterOutcomes([]);
+              setFilterJudgments([]);
+              setFilterConfidences([]);
+              setShowAdvancedFilters(false);
             }}
           >
             リセット
           </button>
         </div>
+
+        {showAdvancedFilters && (
+          <motion.div
+            initial={{ opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: "auto" }}
+            exit={{ opacity: 0, height: 0 }}
+            transition={{ duration: 0.2 }}
+            style={{ overflow: "hidden" }}
+          >
+            <div className="filter-scroll">
+              <div className="filter-group">
+                <span className="filter-label">書庫</span>
+                <div className="filter-chips">
+                  {(["mine", "shared", "senpai"] as Shelf[]).map(s => (
+                    <button
+                      key={s}
+                      type="button"
+                      className={`chip ${filterShelves.includes(s) ? "active" : ""}`}
+                      onClick={() => setFilterShelves(cur => cur.includes(s) ? cur.filter(x => x !== s) : [...cur, s])}
+                    >
+                      {SHELF_LABEL[s].replace("の書架", "")}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              
+              <div className="filter-group">
+                <span className="filter-label">決断の結果</span>
+                <div className="filter-chips">
+                  <button
+                    type="button"
+                    className={`chip ${filterOutcomes.includes("ok") ? "active" : ""}`}
+                    onClick={() => setFilterOutcomes(cur => cur.includes("ok") ? cur.filter(x => x !== "ok") : [...cur, "ok"])}
+                  >うまくいった</button>
+                  <button
+                    type="button"
+                    className={`chip ${filterOutcomes.includes("ng") ? "active" : ""}`}
+                    onClick={() => setFilterOutcomes(cur => cur.includes("ng") ? cur.filter(x => x !== "ng") : [...cur, "ng"])}
+                  >後悔が残る</button>
+                  <button
+                    type="button"
+                    className={`chip ${filterOutcomes.includes("pending") ? "active" : ""}`}
+                    onClick={() => setFilterOutcomes(cur => cur.includes("pending") ? cur.filter(x => x !== "pending") : [...cur, "pending"])}
+                  >結果待ち</button>
+                </div>
+              </div>
+
+              <div className="filter-group">
+                <span className="filter-label">当時の自信</span>
+                <div className="filter-chips">
+                  <button
+                    type="button"
+                    className={`chip ${filterConfidences.includes("high") ? "active" : ""}`}
+                    onClick={() => setFilterConfidences(cur => cur.includes("high") ? cur.filter(x => x !== "high") : [...cur, "high"])}
+                  >自信あり(★4-5)</button>
+                  <button
+                    type="button"
+                    className={`chip ${filterConfidences.includes("low") ? "active" : ""}`}
+                    onClick={() => setFilterConfidences(cur => cur.includes("low") ? cur.filter(x => x !== "low") : [...cur, "low"])}
+                  >自信なし(★1-2)</button>
+                </div>
+              </div>
+
+              <div className="filter-group">
+                <span className="filter-label">判断</span>
+                <div className="filter-chips">
+                  <button
+                    type="button"
+                    className={`chip ${filterJudgments.includes("sound") ? "active" : ""}`}
+                    onClick={() => setFilterJudgments(cur => cur.includes("sound") ? cur.filter(x => x !== "sound") : [...cur, "sound"])}
+                  >妥当</button>
+                  <button
+                    type="button"
+                    className={`chip ${filterJudgments.includes("flawed") ? "active" : ""}`}
+                    onClick={() => setFilterJudgments(cur => cur.includes("flawed") ? cur.filter(x => x !== "flawed") : [...cur, "flawed"])}
+                  >悔いあり</button>
+                </div>
+              </div>
+            </div>
+
+            <div className="tag-filters">
+              <span className="filter-label">タグで絞り込む</span>
+              <div className="chips">
+                {groupedTags.map(({ category, tags }) => {
+                  const selectedN = tags.filter((t) => selectedTags.includes(t)).length;
+                  const isOpen = openCats.includes(category) || selectedN > 0;
+                  return (
+                    <div className="chip-group" key={category}>
+                      <button
+                        type="button"
+                        className={`chip cat${selectedN > 0 ? " active" : ""}`}
+                        onClick={() =>
+                          setOpenCats((cur) =>
+                            cur.includes(category)
+                              ? cur.filter((c) => c !== category)
+                              : [...cur, category]
+                          )
+                        }
+                      >
+                        {isOpen ? "▾" : "▸"} {category}
+                        <span className="cat-n">{selectedN > 0 ? `${selectedN}/${tags.length}` : tags.length}</span>
+                      </button>
+                      {isOpen &&
+                        tags.map((tag) => (
+                          <button
+                            key={tag}
+                            type="button"
+                            className={`chip${selectedTags.includes(tag) ? " active" : ""}`}
+                            onClick={() =>
+                              setSelectedTags((cur) =>
+                                cur.includes(tag) ? cur.filter((t) => t !== tag) : [...cur, tag]
+                              )
+                            }
+                          >
+                            #{tag}
+                          </button>
+                        ))}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          </motion.div>
+        )}
       </section>
 
       <section id="bookcaseWrap" className={overlayOpen ? "hidden" : ""}>
@@ -156,8 +346,13 @@ export function Bookcase({
           <div className="bookcase-container">
             {(["mine", "shared", "senpai"] as Shelf[]).map((shelfKey) => {
               const booksHere = books.filter((b) => b.shelf === shelfKey);
+              const ROW_CAPACITY = 8;
               const rows: JSX.Element[][] = [[], [], []];
-              booksHere.forEach((b, i) => rows[i % 3].push(spine(b, hasFilter && !matches(b))));
+              let rowIndex = 0;
+              booksHere.forEach((b) => {
+                if (rows[rowIndex].length >= ROW_CAPACITY && rowIndex < 2) rowIndex++;
+                rows[rowIndex].push(spine(b, hasFilter && !matches(b)));
+              });
               if (shelfKey !== "senpai") {
                 rows[booksHere.length % 3].push(
                   <span key="new">{newBookButton(shelfKey)}</span>
