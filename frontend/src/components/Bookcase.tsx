@@ -439,7 +439,7 @@ export function Bookcase({
                       pageBooks.forEach((book) => {
                         if (rows[rowIndex].length >= ROW_CAPACITY && rowIndex < 2) rowIndex += 1;
                         const dim = hasFilter && !matches(book);
-                        rows[rowIndex].push(spine(book, dim, () => jumpToBook(book)));
+                        rows[rowIndex].push(spine(book, dim));
                       });
                       if (isLastPage && shelfKey !== "senpai") {
                         rows[pageBooks.length % 3].push(
