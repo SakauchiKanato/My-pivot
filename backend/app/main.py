@@ -60,7 +60,7 @@ dist_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "
 @app.get("/")
 def root():
     if os.path.isdir(dist_dir):
-        return FileResponse(os.path.join(dist_dir, "index.html"))
+        return FileResponse(os.path.join(dist_dir, "index.html"), headers={"Cache-Control": "no-cache, no-store, must-revalidate"})
     return {"message": "My Pivot API v4 is running", "docs": "/docs", "dist_dir": dist_dir, "cwd": os.getcwd(), "file": __file__, "exists": os.path.isdir(dist_dir), "parent_contents": os.listdir(os.path.join(dist_dir, "..")) if os.path.isdir(os.path.join(dist_dir, "..")) else "not found"}
 
 if os.path.isdir(dist_dir):
@@ -71,4 +71,4 @@ if os.path.isdir(dist_dir):
         file_path = os.path.join(dist_dir, full_path)
         if os.path.isfile(file_path):
             return FileResponse(file_path)
-        return FileResponse(os.path.join(dist_dir, "index.html"))
+        return FileResponse(os.path.join(dist_dir, "index.html"), headers={"Cache-Control": "no-cache, no-store, must-revalidate"})
