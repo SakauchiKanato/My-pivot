@@ -55,13 +55,13 @@ app.include_router(bias.router)
 
 
 # フロントエンドの静的ファイル配信
-dist_dir = os.path.join(os.path.dirname(__file__), "..", "..", "frontend", "dist")
+dist_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "frontend", "dist"))
 
 @app.get("/")
 def root():
     if os.path.isdir(dist_dir):
         return FileResponse(os.path.join(dist_dir, "index.html"))
-    return {"message": "My Pivot API v4 is running", "docs": "/docs"}
+    return {"message": "My Pivot API v4 is running", "docs": "/docs", "dist_dir": dist_dir, "cwd": os.getcwd(), "file": __file__, "exists": os.path.isdir(dist_dir), "parent_contents": os.listdir(os.path.join(dist_dir, "..")) if os.path.isdir(os.path.join(dist_dir, "..")) else "not found"}
 
 if os.path.isdir(dist_dir):
     app.mount("/assets", StaticFiles(directory=os.path.join(dist_dir, "assets")), name="assets")
