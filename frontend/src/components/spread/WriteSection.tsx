@@ -218,6 +218,7 @@ export function WriteSectionRight({ form }: { form: WriteForm }) {
           />{" "}
           日付は未定(6ヶ月後にたずねます)
         </label>
+        
       </div>
       <div className="lock-note">
         🔒 綴じた記録は編集できません。誤字などは<b>2分以内</b>

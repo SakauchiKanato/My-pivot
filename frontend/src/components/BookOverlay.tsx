@@ -326,6 +326,7 @@ export function BookOverlay(props: Props) {
           }${phase === "ready" ? " content-ready" : ""}`}
         >
         
+        
 
           {leftPage}
           {rightPage}
