@@ -25,6 +25,10 @@ dist-ssr
 
 # Backend (Python / SQLite)
 backend/my_pivot.db
+backend/my_pivot.db-shm
+backend/my_pivot.db-wal
+*.db-shm
+*.db-wal
 backend/__pycache__/
 backend/*.pyc
 backend/database.db
