@@ -156,7 +156,7 @@ function TimelineCard(
   };
 
   return (
-    <article className={`tl-card${focused ? " focus" : ""}`}>
+    <article className={`tl-card${focused ? " focus" : ""} ${e.outcome}`}>
       <div className="tl-head">
         <span className="date">{e.date}</span>
         <b>{e.title}</b>

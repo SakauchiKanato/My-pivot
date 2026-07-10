@@ -176,6 +176,46 @@ def get_library(
         },
     }
 
+# ---------- マイ・アクティビティ検索＆タイムライン ----------
+@router.get("/entries/me/timeline")
+def get_my_timeline(
+    limit: int = 50,
+    search: Optional[str] = None,
+    session: Session = Depends(get_session),
+    user: User = Depends(get_current_user),
+):
+    """
+    Spotlight検索＆タイムライン用の高速エンドポイント。
+    """
+    query = (
+        select(Entry, Book.shelf, Book.title)
+        .join(Book, Entry.book_id == Book.id)
+        .where(Entry.author_id == user.id)
+        .order_by(Entry.date.desc())
+    )
+
+    if search:
+        query = query.where(Entry.title.ilike(f"%{search}%") | Entry.body.ilike(f"%{search}%"))
+    
+    query = query.limit(limit)
+    results = session.exec(query).all()
+        
+    return [
+        {
+            "id": entry.id,
+            "bookId": entry.book_id,
+            "bookTitle": book_title,
+            "title": entry.title,
+            "date": entry.date,
+            "outcome": entry.outcome,
+            "judgment": entry.judgment,
+            "confidence": entry.confidence,
+            "shelf": shelf,
+        }
+        for entry, shelf, book_title in results
+    ]
+
+
 
 # ---------- 合言葉で既存の共同の書架に参加する ----------
 class JoinSharedRequest(BaseModel):
