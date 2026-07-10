@@ -391,8 +391,8 @@ export function Bookcase({
           <div className="bookcase-container">
             {(["mine", "shared", "senpai"] as Shelf[]).map((shelfKey) => {
               const booksHere = booksByShelf[shelfKey];
+              const ROW_CAPACITY = 8;
               if (!flags.shelfPagination) {
-                const ROW_CAPACITY = 8;
                 const rows: JSX.Element[][] = [[], [], []];
                 let rowIndex = 0;
                 booksHere.forEach((b) => {
@@ -400,7 +400,7 @@ export function Bookcase({
                   rows[rowIndex].push(spine(b, hasFilter && !matches(b)));
                 });
                 if (shelfKey !== "senpai") {
-                  rows[booksHere.length % 3].push(
+                  rows[Math.min(Math.floor(booksHere.length / ROW_CAPACITY), 2)].push(
                     <span key="new">{newBookButton(shelfKey)}</span>
                   );
                 }
@@ -433,7 +433,6 @@ export function Bookcase({
                   className="bookcase-col"
                   renderPage={(pageBooks, _pageIndex, isLastPage) => (
                     (() => {
-                      const ROW_CAPACITY = 8;
                       const rows: JSX.Element[][] = [[], [], []];
                       let rowIndex = 0;
                       pageBooks.forEach((book) => {
@@ -442,7 +441,7 @@ export function Bookcase({
                         rows[rowIndex].push(spine(book, dim));
                       });
                       if (isLastPage && shelfKey !== "senpai") {
-                        rows[pageBooks.length % 3].push(
+                        rows[Math.min(Math.floor(pageBooks.length / ROW_CAPACITY), 2)].push(
                           <span key="new">{newBookButton(shelfKey)}</span>
                         );
                       }
