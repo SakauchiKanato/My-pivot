@@ -291,6 +291,45 @@ def create_book(
     return serialize_book(book, [], viewer_id=user.id, reveal_passcode=True)
 
 
+class BookColorUpdate(BaseModel):
+    fill: str
+
+
+@router.put("/books/{book_id}/color")
+def update_book_color(
+    book_id: int,
+    data: BookColorUpdate,
+    session: Session = Depends(get_session),
+    user: User = Depends(get_current_user),
+):
+    book = session.get(Book, book_id)
+    if not book:
+        raise HTTPException(404, "本が見つかりません")
+    if book.owner_id != user.id:
+        raise HTTPException(403, "この本の色を変更する権限がありません")
+    book.fill = data.fill
+    session.add(book)
+    session.commit()
+    session.refresh(book)
+    return serialize_book(book, list(book.entries), viewer_id=user.id)
+
+
+@router.delete("/books/{book_id}")
+def delete_book(
+    book_id: int,
+    session: Session = Depends(get_session),
+    user: User = Depends(get_current_user),
+):
+    book = session.get(Book, book_id)
+    if not book:
+        raise HTTPException(404, "本が見つかりません")
+    if book.owner_id != user.id:
+        raise HTTPException(403, "この本を削除する権限がありません")
+    session.delete(book)
+    session.commit()
+    return {"ok": True}
+
+
 # ---------- 記録を綴じる ----------
 class EntryCreate(BaseModel):
     title: str

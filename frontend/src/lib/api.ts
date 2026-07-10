@@ -107,6 +107,10 @@ export const apiLogin = (email: string, password: string) =>
 export const fetchLibrary = () => req<Library>("/api/library");
 export const createBook = (shelf: Shelf, title: string, passcode?: string) =>
   post<Book>("/api/books", { shelf, title, passcode });
+export const updateBookColor = (bookId: number, fill: string) =>
+  req<Book>(`/api/books/${bookId}/color`, { method: "PUT", body: JSON.stringify({ fill }), headers: headers() });
+export const deleteBook = (bookId: number) =>
+  req<{ ok: boolean }>(`/api/books/${bookId}`, { method: "DELETE", headers: headers() });
 export const joinSharedBook = (passcode: string) =>
   post<Book>("/api/shared/join", { passcode });
 export const createEntry = (

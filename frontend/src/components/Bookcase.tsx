@@ -1,7 +1,8 @@
-import { useMemo, useRef, useState } from "react";
+import { useMemo, useRef, useState, useEffect } from "react";
 import { motion } from "framer-motion";
 import type { Book, Shelf } from "../lib/api";
 import { SharedAccessModal } from "./SharedAccessModal";
+import { CreateBookModal } from "./CreateBookModal";
 import { KarakuriShelf, type KarakuriShelfHandle, pageOfIndex, SHELF_CAPACITY } from "./shelf/KarakuriShelf";
 import { flags } from "../config/flags";
 
@@ -49,9 +50,9 @@ interface Props {
   // タグ名→カテゴリ(バックエンドのLLM分類結果)。チップの折りたたみに使う
   tagCategories: Record<string, string>;
   onOpenBook: (book: Book) => void;
-  onCreateBook: (shelf: Shelf, title: string) => void;
-  onCreateSharedBook: (title: string, passcode: string) => Promise<void>;
-  onJoinShared: (passcode: string) => Promise<void>;
+  onCreateBook: (shelf: Shelf, title: string) => Promise<number | null | void>;
+  onCreateSharedBook: (title: string, passcode: string) => Promise<number | null | void>;
+  onJoinShared: (passcode: string) => Promise<number | null | void>;
   overlayOpen: boolean;
 }
 
@@ -68,7 +69,9 @@ export function Bookcase({
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
   const [openCats, setOpenCats] = useState<string[]>([]);
   const [sharedModalOpen, setSharedModalOpen] = useState(false);
+  const [mineModalOpen, setMineModalOpen] = useState(false);
   const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
+  const [pendingJumpBookId, setPendingJumpBookId] = useState<number | null>(null);
   const mineShelfRef = useRef<KarakuriShelfHandle>(null);
   const sharedShelfRef = useRef<KarakuriShelfHandle>(null);
   const senpaiShelfRef = useRef<KarakuriShelfHandle>(null);
@@ -174,6 +177,21 @@ export function Bookcase({
     void (el as HTMLElement).offsetWidth;
     el.classList.add("kk-flash");
   };
+  
+  useEffect(() => {
+    if (pendingJumpBookId && flags.shelfPagination) {
+      const book = books.find((b) => b.id === pendingJumpBookId);
+      if (book) {
+        const shelfBooks = books.filter(b => b.shelf === book.shelf);
+        const shelfIndex = shelfBooks.findIndex((candidate) => candidate.id === book.id);
+        if (shelfIndex >= 0) {
+          const targetPage = pageOfIndex(shelfIndex, SHELF_CAPACITY);
+          shelfRefs[book.shelf].current?.jumpToPage(targetPage, () => flashBook(book.id));
+        }
+        setPendingJumpBookId(null);
+      }
+    }
+  }, [books, pendingJumpBookId]);
 
   const jumpToBook = (book: Book) => {
     if (!flags.shelfPagination) {
@@ -216,8 +234,10 @@ export function Bookcase({
           setSharedModalOpen(true);
           return;
         }
-        const title = prompt("新しい本のタイトル(例: 就活の記録)");
-        if (title && title.trim()) onCreateBook(shelf, title.trim());
+        if (shelf === "mine") {
+          setMineModalOpen(true);
+          return;
+        }
       }}
     >
       ＋ 新しい本
@@ -484,10 +504,10 @@ export function Bookcase({
             </span>
           </div>
           <div className="bookcase">
-            {[0, 1, 2].map((r) => (
+            {Array.from({ length: Math.max(3, Math.ceil(hits.length / 8)) }).map((_, r) => (
               <div key={r}>
                 <div className="shelf">
-                  {hits.filter((_, i) => i % 3 === r).map((b) => spine(b, false, () => jumpToBook(b)))}
+                  {hits.slice(r * 8, (r + 1) * 8).map((b) => spine(b, false, () => onOpenBook(b)))}
                 </div>
                 <div className="shelf-board" />
               </div>
@@ -499,8 +519,25 @@ export function Bookcase({
       {sharedModalOpen && (
         <SharedAccessModal
           onClose={() => setSharedModalOpen(false)}
-          onCreate={onCreateSharedBook}
-          onJoin={onJoinShared}
+          onCreate={async (t, p) => {
+            const id = await onCreateSharedBook(t, p);
+            if (id) setPendingJumpBookId(id);
+          }}
+          onJoin={async (p) => {
+            const id = await onJoinShared(p);
+            if (id) setPendingJumpBookId(id);
+          }}
+        />
+      )}
+
+      {mineModalOpen && (
+        <CreateBookModal
+          shelf="mine"
+          onClose={() => setMineModalOpen(false)}
+          onCreate={async (t) => {
+            const id = await onCreateBook("mine", t);
+            if (id) setPendingJumpBookId(id);
+          }}
         />
       )}
     </>

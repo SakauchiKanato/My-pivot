@@ -13,6 +13,8 @@ import {
   withdrawEntry,
   publishEntry,
   joinSharedBook,
+  updateBookColor,
+  deleteBook,
 } from "./lib/api";
 import { getAuthUser, logout, type AuthUser } from "./lib/auth";
 import { addMonthsISO, todayISO } from "./lib/dates";
@@ -95,24 +97,38 @@ export default function App() {
 
   const handleCreateBook = async (shelf: Shelf, title: string) => {
     try {
-      await createBook(shelf, title);
+      const book = await createBook(shelf, title);
       await reload();
       showToast(`『${title.slice(0, 12)}』を棚に置きました`);
+      return book.id;
     } catch (e) {
       showToast(e instanceof Error ? e.message : "作成に失敗しました");
+      return null;
     }
   };
 
   const handleCreateSharedBook = async (title: string, passcode: string) => {
-    await createBook("shared", title, passcode);
-    await reload();
-    showToast(`『${title.slice(0, 12)}』を共同の書架に置きました。合言葉「${passcode}」を仲間に伝えてください。`);
+    try {
+      const book = await createBook("shared", title, passcode);
+      await reload();
+      showToast(`『${title.slice(0, 12)}』を共同の書架に置きました。合言葉「${passcode}」を仲間に伝えてください。`);
+      return book.id;
+    } catch (e) {
+      showToast(e instanceof Error ? e.message : "作成に失敗しました");
+      return null;
+    }
   };
 
   const handleJoinShared = async (passcode: string) => {
-    const book = await joinSharedBook(passcode);
-    await reload();
-    showToast(`『${book.title}』に参加しました。`);
+    try {
+      const book = await joinSharedBook(passcode);
+      await reload();
+      showToast(`『${book.title}』に参加しました。`);
+      return book.id;
+    } catch (e) {
+      showToast(e instanceof Error ? e.message : "参加に失敗しました");
+      return null;
+    }
   };
 
   return (
@@ -163,6 +179,15 @@ export default function App() {
           onClose={() => {
             setOpenBookId(null);
             setFocusEntryId(null);
+          }}
+          onUpdateColor={async (bookId, fill) => {
+            await updateBookColor(bookId, fill);
+            await reload();
+          }}
+          onDeleteBook={async (bookId) => {
+            await deleteBook(bookId);
+            setOpenBookId(null);
+            await reload();
           }}
           onSaveEntry={async (data) => {
             await createEntry(openBook.id, data);
