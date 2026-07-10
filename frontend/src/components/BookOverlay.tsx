@@ -413,21 +413,24 @@ export function BookOverlay(props: Props) {
                 await props.onUpdateColor(book.id, editColor);
                 setSettingsOpen(false);
               }}>
-                色を保存
+                色を保存する
               </button>
             </div>
             
             <hr style={{ borderColor: "rgba(255,255,255,0.1)", marginBottom: "24px" }} />
             
-            <h2>危険な操作</h2>
-            <div style={{ display: "flex", gap: "12px" }}>
+            <h2>本を焼却炉へ...？（本を削除する）</h2>
+            <div style={{ display: "flex", gap: "12px", flexDirection: "column" }}>
+              <p style={{ fontSize: "12px", color: "#9ca3af", margin: 0 }}>
+                ※一度灰になった本は、もう二度と元には戻せません。
+              </p>
               <button 
                 className="plain" 
                 type="button" 
-                style={{ color: "#ef4444" }}
+                style={{ color: "#ef4444", alignSelf: "flex-start" }}
                 disabled={isDeleting}
                 onClick={async () => {
-                  if (confirm("本当にこの本を削除しますか？\n記録されているデータは全て失われます。")) {
+                  if (confirm("本当にこの本を焼却しますか？\n記録されているデータは全て失われます。")) {
                     setIsDeleting(true);
                     await props.onDeleteBook(book.id);
                   }

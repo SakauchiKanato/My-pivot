@@ -503,16 +503,21 @@ export function Bookcase({
               先達
             </span>
           </div>
-          <div className="bookcase">
-            {Array.from({ length: Math.max(3, Math.ceil(hits.length / 8)) }).map((_, r) => (
-              <div key={r}>
-                <div className="shelf">
-                  {hits.slice(r * 8, (r + 1) * 8).map((b) => spine(b, false, () => onOpenBook(b)))}
-                </div>
-                <div className="shelf-board" />
+          {Array.from({ length: Math.max(1, Math.ceil(hits.length / 24)) }).map((_, bookcaseIndex) => {
+            const bookcaseHits = hits.slice(bookcaseIndex * 24, (bookcaseIndex + 1) * 24);
+            return (
+              <div key={bookcaseIndex} className="bookcase" style={{ marginBottom: 40 }}>
+                {Array.from({ length: 3 }).map((_, r) => (
+                  <div key={r}>
+                    <div className="shelf">
+                      {bookcaseHits.slice(r * 8, (r + 1) * 8).map((b) => spine(b, false, () => onOpenBook(b)))}
+                    </div>
+                    <div className="shelf-board" />
+                  </div>
+                ))}
               </div>
-            ))}
-          </div>
+            );
+          })}
         </div>
       </section>
 
