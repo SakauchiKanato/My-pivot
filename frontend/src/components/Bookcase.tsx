@@ -53,6 +53,7 @@ interface Props {
   onCreateBook: (shelf: Shelf, title: string) => Promise<number | null | void>;
   onCreateSharedBook: (title: string, passcode: string) => Promise<number | null | void>;
   onJoinShared: (passcode: string) => Promise<number | null | void>;
+  onDeleteBooks: (ids: number[]) => Promise<void>;
   overlayOpen: boolean;
 }
 
@@ -63,6 +64,7 @@ export function Bookcase({
   onCreateBook,
   onCreateSharedBook,
   onJoinShared,
+  onDeleteBooks,
   overlayOpen,
 }: Props) {
   const [query, setQuery] = useState("");
@@ -72,9 +74,15 @@ export function Bookcase({
   const [mineModalOpen, setMineModalOpen] = useState(false);
   const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
   const [pendingJumpBookId, setPendingJumpBookId] = useState<number | null>(null);
+  const [hitPage, setHitPage] = useState(0);
+  const [declutterMode, setDeclutterMode] = useState(false);
+  const [selectedBookIds, setSelectedBookIds] = useState<Set<number>>(new Set());
+  const [confirmDeleteModalOpen, setConfirmDeleteModalOpen] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
   const mineShelfRef = useRef<KarakuriShelfHandle>(null);
   const sharedShelfRef = useRef<KarakuriShelfHandle>(null);
   const senpaiShelfRef = useRef<KarakuriShelfHandle>(null);
+  const hitScrollContainerRef = useRef<HTMLDivElement>(null);
 
   const shelfRefs: Record<Shelf, React.RefObject<KarakuriShelfHandle>> = {
     mine: mineShelfRef,
@@ -170,6 +178,31 @@ export function Bookcase({
 
   const hits = hasFilter ? books.filter(matches) : [];
 
+  const hitBookcaseCount = Math.max(1, Math.ceil(hits.length / 24));
+  const showCarouselButtons = hitBookcaseCount > 1;
+
+  const handleHitScroll = () => {
+    if (!hitScrollContainerRef.current) return;
+    const scrollLeft = hitScrollContainerRef.current.scrollLeft;
+    const itemWidth = 345 + 60; // bookcase width + gap
+    const newPage = Math.round(scrollLeft / itemWidth);
+    if (newPage !== hitPage) {
+      setHitPage(newPage);
+    }
+  };
+
+  const scrollHits = (targetPage: number) => {
+    if (targetPage < 0 || targetPage >= hitBookcaseCount) return;
+    if (hitScrollContainerRef.current) {
+      const itemWidth = 345 + 60;
+      hitScrollContainerRef.current.scrollTo({
+        left: targetPage * itemWidth,
+        behavior: "smooth",
+      });
+      setHitPage(targetPage);
+    }
+  };
+
   const flashBook = (bookId: number) => {
     const el = document.querySelector(`[data-book-id="${bookId}"]`);
     if (!el) return;
@@ -193,36 +226,40 @@ export function Bookcase({
     }
   }, [books, pendingJumpBookId]);
 
-  const jumpToBook = (book: Book) => {
-    if (!flags.shelfPagination) {
-      onOpenBook(book);
-      return;
-    }
-
-    const shelfBooks = booksByShelf[book.shelf];
-    const shelfIndex = shelfBooks.findIndex((candidate) => candidate.id === book.id);
-    if (shelfIndex < 0) {
-      onOpenBook(book);
-      return;
-    }
-
-    const targetPage = pageOfIndex(shelfIndex, SHELF_CAPACITY);
-    shelfRefs[book.shelf].current?.jumpToPage(targetPage, () => flashBook(book.id));
+  const spine = (book: Book, dim: boolean, onClick: () => void = () => onOpenBook(book)) => {
+    const isSelected = declutterMode && selectedBookIds.has(book.id);
+    return (
+      <button
+        key={book.id}
+        className={`book-spine${dim ? " dim" : ""}`}
+        data-book-id={book.id}
+        type="button"
+        style={{ 
+          height: book.height, 
+          background: book.fill,
+          outline: isSelected ? "3px solid #ff4d4f" : "none",
+          transform: isSelected ? "translateY(-10px)" : undefined,
+          opacity: declutterMode && !isSelected ? 0.6 : 1,
+          transition: "transform 0.2s, opacity 0.2s, outline 0.2s"
+        }}
+        onClick={() => {
+          if (declutterMode) {
+            setSelectedBookIds((prev) => {
+              const next = new Set(prev);
+              if (next.has(book.id)) next.delete(book.id);
+              else next.add(book.id);
+              return next;
+            });
+          } else {
+            onClick();
+          }
+        }}
+      >
+        {book.title}
+        <span className={`ribbon ${book.shelf}`} />
+      </button>
+    );
   };
-
-  const spine = (book: Book, dim: boolean, onClick: () => void = () => onOpenBook(book)) => (
-    <button
-      key={book.id}
-      className={`book-spine${dim ? " dim" : ""}`}
-      data-book-id={book.id}
-      type="button"
-      style={{ height: book.height, background: book.fill }}
-      onClick={onClick}
-    >
-      {book.title}
-      <span className={`ribbon ${book.shelf}`} />
-    </button>
-  );
 
   const newBookButton = (shelf: Shelf) => (
     <button
@@ -257,6 +294,16 @@ export function Bookcase({
               onChange={(e) => setQuery(e.target.value)}
             />
           </label>
+          <button
+            className="plain"
+            type="button"
+            onClick={() => {
+              setDeclutterMode(!declutterMode);
+              if (declutterMode) setSelectedBookIds(new Set());
+            }}
+          >
+            {declutterMode ? "やめる" : "🧹 断捨離モード"}
+          </button>
           <button
             className="plain"
             type="button"
@@ -406,6 +453,80 @@ export function Bookcase({
         )}
       </section>
 
+      {declutterMode && selectedBookIds.size > 0 && (
+        <div style={{
+          position: "fixed",
+          bottom: "32px",
+          left: "50%",
+          transform: "translateX(-50%)",
+          background: "var(--paper)",
+          boxShadow: "var(--shadow)",
+          padding: "16px 24px",
+          borderRadius: "32px",
+          display: "flex",
+          alignItems: "center",
+          gap: "24px",
+          zIndex: 1000,
+          border: "1px solid var(--line)"
+        }}>
+          <span style={{ fontWeight: "bold", color: "var(--ink)" }}>{selectedBookIds.size} 冊を選択中</span>
+          <button
+            className="btn"
+            style={{ background: "#ff4d4f", color: "white", padding: "8px 16px" }}
+            onClick={() => setConfirmDeleteModalOpen(true)}
+          >
+            一括削除する
+          </button>
+        </div>
+      )}
+
+      {confirmDeleteModalOpen && (
+        <div id="sharedAccessModal" className="open" onClick={(e) => {
+          if ((e.target as HTMLElement).id === "sharedAccessModal") setConfirmDeleteModalOpen(false);
+        }}>
+          <div className="cal-box shared-access-box">
+            <button className="plain cal-close" type="button" onClick={() => setConfirmDeleteModalOpen(false)}>
+              ✕ 閉じる
+            </button>
+            
+            <h2>本を焼却炉へ...？（一括削除）</h2>
+            <div style={{ display: "flex", gap: "12px", flexDirection: "column" }}>
+              <p style={{ fontSize: "14px", color: "var(--ink)", margin: 0 }}>
+                選択した {selectedBookIds.size} 冊の本を本当に焼却しますか？
+              </p>
+              <p style={{ fontSize: "12px", color: "#9ca3af", margin: 0 }}>
+                ※一度灰になった本は、もう二度と元には戻せません。
+              </p>
+              <div style={{ display: "flex", gap: "12px", marginTop: "16px" }}>
+                <button 
+                  className="plain" 
+                  type="button" 
+                  style={{ color: "#ef4444" }}
+                  disabled={isDeleting}
+                  onClick={async () => {
+                    setIsDeleting(true);
+                    await onDeleteBooks(Array.from(selectedBookIds));
+                    setIsDeleting(false);
+                    setSelectedBookIds(new Set());
+                    setDeclutterMode(false);
+                    setConfirmDeleteModalOpen(false);
+                  }}
+                >
+                  {isDeleting ? "削除中..." : "一括削除する"}
+                </button>
+                <button 
+                  className="plain dark" 
+                  type="button" 
+                  onClick={() => setConfirmDeleteModalOpen(false)}
+                >
+                  キャンセル
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       <section id="bookcaseWrap" className={overlayOpen ? "hidden" : ""}>
         <div id="normalShelfView" className={hasFilter ? "hidden" : ""}>
           <div className="bookcase-container">
@@ -488,7 +609,31 @@ export function Bookcase({
           className={hasFilter ? "active" : ""}
           style={{ display: hasFilter ? "block" : "none" }}
         >
-          <p className="shelf-title">見つかった本(出自は帯の色)</p>
+          <div className="kk-head" style={{ marginTop: "20px", marginBottom: "16px" }}>
+            {showCarouselButtons ? (
+              <>
+                <button
+                  type="button"
+                  className={`kk-tri ${hitPage === 0 ? "kk-tri--off" : ""}`}
+                  onClick={() => scrollHits(hitPage - 1)}
+                >
+                  ◀
+                </button>
+                <h2 className="kk-title" style={{ fontSize: "16px", margin: "0 16px" }}>見つかった本(出自は帯の色)</h2>
+                <button
+                  type="button"
+                  className={`kk-tri ${hitPage === hitBookcaseCount - 1 ? "kk-tri--off" : ""}`}
+                  onClick={() => scrollHits(hitPage + 1)}
+                >
+                  ▶
+                </button>
+                <span className="kk-pageno" style={{ marginLeft: "12px" }}>{hitPage + 1} / {hitBookcaseCount}</span>
+              </>
+            ) : (
+              <h2 className="kk-title" style={{ fontSize: "16px" }}>見つかった本(出自は帯の色)</h2>
+            )}
+          </div>
+
           <div className="legend">
             <span className="l-mine">
               <i />
@@ -503,21 +648,29 @@ export function Bookcase({
               先達
             </span>
           </div>
-          {Array.from({ length: Math.max(1, Math.ceil(hits.length / 24)) }).map((_, bookcaseIndex) => {
-            const bookcaseHits = hits.slice(bookcaseIndex * 24, (bookcaseIndex + 1) * 24);
-            return (
-              <div key={bookcaseIndex} className="bookcase" style={{ marginBottom: 40 }}>
-                {Array.from({ length: 3 }).map((_, r) => (
-                  <div key={r}>
-                    <div className="shelf">
-                      {bookcaseHits.slice(r * 8, (r + 1) * 8).map((b) => spine(b, false, () => onOpenBook(b)))}
-                    </div>
-                    <div className="shelf-board" />
+          <div style={{ position: "relative" }}>
+            <div 
+              ref={hitScrollContainerRef}
+              onScroll={handleHitScroll}
+              style={{ display: "flex", gap: "60px", overflowX: "auto", paddingBottom: "20px", scrollBehavior: "smooth", scrollSnapType: "x mandatory" }}
+            >
+              {Array.from({ length: hitBookcaseCount }).map((_, bookcaseIndex) => {
+                const bookcaseHits = hits.slice(bookcaseIndex * 24, (bookcaseIndex + 1) * 24);
+                return (
+                  <div key={bookcaseIndex} className="bookcase" style={{ flexShrink: 0, width: "345px", scrollSnapAlign: "start" }}>
+                    {Array.from({ length: 3 }).map((_, r) => (
+                      <div key={r}>
+                        <div className="shelf">
+                          {bookcaseHits.slice(r * 8, (r + 1) * 8).map((b) => spine(b, false, () => onOpenBook(b)))}
+                        </div>
+                        <div className="shelf-board" />
+                      </div>
+                    ))}
                   </div>
-                ))}
-              </div>
-            );
-          })}
+                );
+              })}
+            </div>
+          </div>
         </div>
       </section>
 

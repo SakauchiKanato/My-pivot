@@ -107,6 +107,23 @@ export default function App() {
     }
   };
 
+  const handleDeleteBooks = async (ids: number[]) => {
+    let successCount = 0;
+    try {
+      for (const id of ids) {
+        await deleteBook(id);
+        successCount++;
+      }
+    } catch (e) {
+      showToast(e instanceof Error ? e.message : "一部の削除に失敗しました");
+    } finally {
+      if (successCount > 0) {
+        await reload();
+        showToast(`${successCount}冊の本を削除しました`);
+      }
+    }
+  };
+
   const handleCreateSharedBook = async (title: string, passcode: string) => {
     try {
       const book = await createBook("shared", title, passcode);
@@ -165,6 +182,7 @@ export default function App() {
         onCreateBook={handleCreateBook}
         onCreateSharedBook={handleCreateSharedBook}
         onJoinShared={handleJoinShared}
+        onDeleteBooks={handleDeleteBooks}
       />
 
       {openBook && (

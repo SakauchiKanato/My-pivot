@@ -171,7 +171,7 @@
     box-shadow:0 4px 6px rgba(0,0,0,.3);
   }
   #hitShelfContainer{
-    display:none;width:100%;max-width:345px;margin:18px auto 0;
+    display:none;width:100%;max-width:1180px;margin:18px auto 0;
     opacity:0;transform:translateY(24px) scale(.96);
     transition:opacity .4s ease,transform .4s ease;
   }
