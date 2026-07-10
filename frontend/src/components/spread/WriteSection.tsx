@@ -13,6 +13,7 @@
  * BookOverlay 側で見開きの左右ページにそれぞれ差し込む想定。
  */
 
+
 import { useEffect, useMemo, useState } from "react";
 
 import type { Book, Entry } from "../../lib/api";
