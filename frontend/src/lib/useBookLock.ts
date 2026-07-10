@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 import { getAuthUser } from "./auth";
 import { getBookLockRef } from "./firebase";
 import { onValue, set, onDisconnect, remove } from "firebase/database";
@@ -10,7 +10,11 @@ export interface LockStatus {
 
 export function useBookLock(bookId: number | undefined, isWriting: boolean) {
   const [lockStatus, setLockStatus] = useState<LockStatus>({ lockedBy: null, lockedByName: null });
-  const authUser = getAuthUser();
+  
+  // Memoize authUser to prevent changing reference on every render
+  const authUser = useMemo(() => getAuthUser(), []);
+  const userId = authUser ? String(authUser.userId) : null;
+  const username = authUser ? authUser.username : null;
 
   useEffect(() => {
     if (!bookId) return;
@@ -21,12 +25,18 @@ export function useBookLock(bookId: number | undefined, isWriting: boolean) {
     const unsubscribe = onValue(lockRef, (snapshot) => {
       const data = snapshot.val();
       if (data) {
-        setLockStatus({
-          lockedBy: data.userId,
-          lockedByName: data.username,
+        setLockStatus(prev => {
+          if (prev.lockedBy === data.userId && prev.lockedByName === data.username) return prev;
+          return {
+            lockedBy: data.userId,
+            lockedByName: data.username,
+          };
         });
       } else {
-        setLockStatus({ lockedBy: null, lockedByName: null });
+        setLockStatus(prev => {
+          if (prev.lockedBy === null && prev.lockedByName === null) return prev;
+          return { lockedBy: null, lockedByName: null };
+        });
       }
     });
 
@@ -34,16 +44,16 @@ export function useBookLock(bookId: number | undefined, isWriting: boolean) {
   }, [bookId]);
 
   useEffect(() => {
-    if (!bookId || !authUser) return;
+    if (!bookId || !userId || !username) return;
     
     const lockRef = getBookLockRef(bookId);
     
     if (isWriting) {
       // Try to acquire lock if not already locked by someone else
-      if (lockStatus.lockedBy === null || lockStatus.lockedBy === String(authUser.userId)) {
+      if (lockStatus.lockedBy === null || lockStatus.lockedBy === userId) {
         const lockData = {
-          userId: String(authUser.userId),
-          username: authUser.username,
+          userId: userId,
+          username: username,
           timestamp: Date.now()
         };
         
@@ -53,7 +63,7 @@ export function useBookLock(bookId: number | undefined, isWriting: boolean) {
       }
     } else {
       // Release lock if we held it
-      if (lockStatus.lockedBy === String(authUser.userId)) {
+      if (lockStatus.lockedBy === userId) {
         remove(lockRef);
         onDisconnect(lockRef).cancel();
       }
@@ -61,12 +71,12 @@ export function useBookLock(bookId: number | undefined, isWriting: boolean) {
 
     // Also cleanup on unmount
     return () => {
-      if (isWriting && lockStatus.lockedBy === String(authUser.userId)) {
+      if (isWriting && lockStatus.lockedBy === userId) {
         remove(lockRef);
         onDisconnect(lockRef).cancel();
       }
     };
-  }, [bookId, isWriting, authUser, lockStatus.lockedBy]);
+  }, [bookId, isWriting, userId, username, lockStatus.lockedBy]);
 
   return lockStatus;
 }

@@ -66,6 +66,7 @@ export function BookOverlay(props: Props) {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [editColor, setEditColor] = useState(book.fill);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [confirmDeleteModalOpen, setConfirmDeleteModalOpen] = useState(false);
 
   const writeForm = useWriteForm({
     allEntries: props.allEntries,
@@ -461,16 +462,54 @@ export function BookOverlay(props: Props) {
                 className="plain" 
                 type="button" 
                 style={{ color: "#ef4444", alignSelf: "flex-start" }}
-                disabled={isDeleting}
-                onClick={async () => {
-                  if (confirm("本当にこの本を焼却しますか？\n記録されているデータは全て失われます。")) {
-                    setIsDeleting(true);
-                    await props.onDeleteBook(book.id);
-                  }
-                }}
+                onClick={() => setConfirmDeleteModalOpen(true)}
               >
                 {isDeleting ? "削除中..." : "この本を削除する"}
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+      
+      {confirmDeleteModalOpen && (
+        <div id="sharedAccessModal" className="open" onClick={(e) => {
+          if ((e.target as HTMLElement).id === "sharedAccessModal") setConfirmDeleteModalOpen(false);
+        }}>
+          <div className="cal-box shared-access-box">
+            <button className="plain cal-close" type="button" onClick={() => setConfirmDeleteModalOpen(false)}>
+              ✕ 閉じる
+            </button>
+            
+            <h2>本を焼却炉へ...？（削除の確認）</h2>
+            <div style={{ display: "flex", gap: "12px", flexDirection: "column" }}>
+              <p style={{ fontSize: "14px", color: "var(--ink)", margin: 0 }}>
+                本当にこの本を焼却しますか？
+              </p>
+              <p style={{ fontSize: "12px", color: "#9ca3af", margin: 0 }}>
+                ※一度灰になった本は、もう二度と元には戻せません。<br/>
+                ※記録されているデータも全て失われます。
+              </p>
+              <div style={{ display: "flex", gap: "12px", marginTop: "16px" }}>
+                <button 
+                  className="plain" 
+                  type="button" 
+                  style={{ color: "#ef4444" }}
+                  disabled={isDeleting}
+                  onClick={async () => {
+                    setIsDeleting(true);
+                    await props.onDeleteBook(book.id);
+                  }}
+                >
+                  {isDeleting ? "削除中..." : "削除する"}
+                </button>
+                <button 
+                  className="plain dark" 
+                  type="button" 
+                  onClick={() => setConfirmDeleteModalOpen(false)}
+                >
+                  キャンセル
+                </button>
+              </div>
             </div>
           </div>
         </div>
