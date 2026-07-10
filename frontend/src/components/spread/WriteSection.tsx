@@ -214,6 +214,7 @@ export function WriteSectionRight({ form }: { form: WriteForm }) {
                 form.setResolveDate(addMonthsISO(todayISO(), 1));
               }
             }}
+            
           />{" "}
           日付は未定(6ヶ月後にたずねます)
         </label>
