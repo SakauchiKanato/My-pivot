@@ -23,6 +23,8 @@ import { TopBar } from "./components/TopBar";
 import { Bookcase } from "./components/Bookcase";
 import { BookOverlay } from "./components/BookOverlay";
 import { CalibrationModal } from "./components/CalibrationModal";
+import { getGlobalUpdateRef, broadcastGlobalUpdate } from "./lib/firebase";
+import { onValue } from "firebase/database";
 import type { WriteDraft } from "./components/spread/WriteSection";
 import { EmotionalTimeline } from "./components/EmotionalTimeline";
 
@@ -74,9 +76,29 @@ export default function App() {
     }
   }, []);
 
+  const syncReload = useCallback(async () => {
+    await reload();
+    broadcastGlobalUpdate();
+  }, [reload]);
+
   useEffect(() => {
     if (user) reload();
     else setLoading(false);
+  }, [user, reload]);
+
+  useEffect(() => {
+    if (!user) return;
+    const updateRef = getGlobalUpdateRef();
+    let initialLoad = true;
+    const unsubscribe = onValue(updateRef, (snapshot) => {
+      if (initialLoad) {
+        initialLoad = false;
+        return;
+      }
+      // When a new value comes in, reload the data
+      reload();
+    });
+    return () => unsubscribe();
   }, [user, reload]);
 
   if (!user) {
@@ -98,7 +120,7 @@ export default function App() {
   const handleCreateBook = async (shelf: Shelf, title: string) => {
     try {
       const book = await createBook(shelf, title);
-      await reload();
+      await syncReload();
       showToast(`『${title.slice(0, 12)}』を棚に置きました`);
       return book.id;
     } catch (e) {
@@ -118,7 +140,7 @@ export default function App() {
       showToast(e instanceof Error ? e.message : "一部の削除に失敗しました");
     } finally {
       if (successCount > 0) {
-        await reload();
+        await syncReload();
         showToast(`${successCount}冊の本を削除しました`);
       }
     }
@@ -127,7 +149,7 @@ export default function App() {
   const handleCreateSharedBook = async (title: string, passcode: string) => {
     try {
       const book = await createBook("shared", title, passcode);
-      await reload();
+      await syncReload();
       showToast(`『${title.slice(0, 12)}』を共同の書架に置きました。合言葉「${passcode}」を仲間に伝えてください。`);
       return book.id;
     } catch (e) {
@@ -139,7 +161,7 @@ export default function App() {
   const handleJoinShared = async (passcode: string) => {
     try {
       const book = await joinSharedBook(passcode);
-      await reload();
+      await syncReload();
       showToast(`『${book.title}』に参加しました。`);
       return book.id;
     } catch (e) {
@@ -200,16 +222,16 @@ export default function App() {
           }}
           onUpdateColor={async (bookId, fill) => {
             await updateBookColor(bookId, fill);
-            await reload();
+            await syncReload();
           }}
           onDeleteBook={async (bookId) => {
             await deleteBook(bookId);
             setOpenBookId(null);
-            await reload();
+            await syncReload();
           }}
           onSaveEntry={async (data) => {
             await createEntry(openBook.id, data);
-            await reload();
+            await syncReload();
             const resolve = data.resolveDate ?? addMonthsISO(todayISO(), 6);
             showToast(
               data.resolveDate
@@ -219,22 +241,22 @@ export default function App() {
           }}
           onResolve={async (entryId, data) => {
             await resolveEntry(entryId, data);
-            await reload();
+            await syncReload();
             showToast("結果を綴じました。計器に反映されています。");
           }}
           onPostpone={async (entryId) => {
             const updated = await postponeEntry(entryId);
-            await reload();
+            await syncReload();
             showToast(`わかりました。1ヶ月後(${updated.resolveDate})に、もう一度たずねます。`);
           }}
           onAppend={async (entryId, text) => {
             await appendEntry(entryId, text);
-            await reload();
+            await syncReload();
             showToast("追記を残しました。決定時の記録はそのままです。");
           }}
           onWithdraw={async (entry): Promise<WriteDraft> => {
             const res = await withdrawEntry(entry.id);
-            await reload();
+            await syncReload();
             showToast("フォームに戻しました。書き直して、もう一度綴じてください。");
             const w = res.withdrawn;
             return {
@@ -246,7 +268,7 @@ export default function App() {
           }}
           onPublish={async (entryId, data) => {
             const res = await publishEntry(entryId, data);
-            await reload();
+            await syncReload();
             showToast(
               res.passcode
                 ? `出版しました。原本はあなたの書架に残っています。合言葉「${res.passcode}」を仲間に伝えてください。`
