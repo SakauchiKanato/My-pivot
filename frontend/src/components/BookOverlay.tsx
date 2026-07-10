@@ -1,17 +1,22 @@
 /**
  * 本を開くオーバーレイ(v3 のアニメーションを移植)
  *
- * A-1 の受け皿: FLAGS.spreadLayout === "tabs" のとき現行構造。
- * "past_present"(左=過去/右=現在)を採用する場合、renderLeftPage /
- * renderRightPage の中身を組み替える。各セクションは独立コンポーネント
- * なので、配置変更はこのファイル内で完結する。
+ * v4での変更点:
+ * - モードタブ(目次/書く/探す/年表)を左ページ上部に固定表示。
+ *   ページ送り(スクロール)せずにどのモードからでも移動できるようにする。
+ * - mode === "write" のときは見開きを「書く」専用レイアウトに切り替え、
+ *   左ページに本文+recall(WriteSectionLeft)、
+ *   右ページにタイトル・タグ・確信度・日付・保存(WriteSectionRight)を表示する。
+ *   これにより本文を書きながらスクロールせずに全項目が見渡せる。
+ * - 上記以外のモード(目次/探す/年表)は従来どおり、
+ *   左ページ=本の基本情報+本内検索、右ページ=モードごとのセクション。
  */
 import { useEffect, useMemo, useState } from "react";
 import type { Book, Entry } from "../lib/api";
 import type { ServerFlags } from "../config/flags";
 import { FLAGS } from "../config/flags";
-import { Badges } from "./spread/Badges";
-import { WriteSection, type WriteDraft } from "./spread/WriteSection";
+import { Badges } from "../components/spread/Badges.tsx";
+import { useWriteForm, WriteSectionLeft, WriteSectionRight, type WriteDraft } from "./spread/WriteSection";
 import { TimelineSection } from "./spread/TimelineSection";
 
 type Mode = "toc" | "write" | "search" | "timeline";
@@ -29,7 +34,7 @@ interface Props {
   focusEntryId: number | null;
   serverFlags: ServerFlags | null;
   onClose: () => void;
-  onSaveEntry: Parameters<typeof WriteSection>[0]["onSave"];
+  onSaveEntry: Parameters<typeof useWriteForm>[0]["onSave"];
   onResolve: Parameters<typeof TimelineSection>[0]["onResolve"];
   onPostpone: (entryId: number) => Promise<void>;
   onAppend: (entryId: number, text: string) => Promise<void>;
@@ -49,6 +54,16 @@ export function BookOverlay(props: Props) {
   const [mode, setMode] = useState<Mode>(props.startMode ?? "toc");
   const [innerQuery, setInnerQuery] = useState("");
   const [draft, setDraft] = useState<WriteDraft | null>(null);
+
+  const writeForm = useWriteForm({
+    allEntries: props.allEntries,
+    books: props.books,
+    initialDraft: draft,
+    onSave: async (data) => {
+      await props.onSaveEntry(data);
+      setDraft(null);
+    },
+  });
 
   // アニメーション段階: cover表示 → 開く → フリップ → 本文表示
   const [phase, setPhase] = useState<"init" | "cover" | "opening" | "flipping" | "ready">("init");
@@ -162,96 +177,127 @@ export function BookOverlay(props: Props) {
     />
   );
 
-  /* A-1 分岐点: "past_present" 採用時はここを組み替える */
+  const isWriteSpread = mode === "write" && !readOnly;
+
+  // 目次/書く/探す/年表: どのモードからでも移動できるよう左ページ上部に固定表示
+  const modeTabs = (
+    <div className="mode-tabs">
+      <button
+        type="button"
+        className={mode === "toc" ? "active" : ""}
+        onClick={() => setMode("toc")}
+      >
+        目次
+      </button>
+      {!readOnly && (
+        <button
+          type="button"
+          className={mode === "write" ? "active" : ""}
+          onClick={() => setMode("write")}
+        >
+          書く
+        </button>
+      )}
+      <button
+        type="button"
+        className={mode === "search" ? "active" : ""}
+        onClick={() => setMode("search")}
+      >
+        探す
+      </button>
+      <button
+        type="button"
+        className={mode === "timeline" ? "active" : ""}
+        onClick={() => setMode("timeline")}
+      >
+        年表
+      </button>
+    </div>
+  );
+
+  const leftPage = (
+    <div className="page left">
+      {modeTabs}
+      {isWriteSpread ? (
+        <WriteSectionLeft form={writeForm} />
+      ) : (
+        <>
+          <span className={`shelf-badge ${book.shelf}`}>
+            {SHELF_LABEL[book.shelf]}
+            {readOnly ? " / 読み専用" : book.shelf === "mine" ? " / 非公開" : " / 仲間と共有"}
+          </span>
+          <h2>{book.title}</h2>
+          <p className="hint">
+            1ページ目。目次、本内検索、{readOnly ? "年表" : "書き込み"}の入口をまとめたホームです。
+          </p>
+          <label className="book-search">
+            <span>⌕</span>
+            <input
+              type="search"
+              placeholder="この本の中をフリーワード検索"
+              value={innerQuery}
+              onChange={(e) => {
+                setInnerQuery(e.target.value);
+                if (mode !== "search") setMode("search");
+              }}
+            />
+          </label>
+          {tocButtons}
+          <div className="results">{resultCards}</div>
+        </>
+      )}
+    </div>
+  );
+
   const rightPage = (
     <div className="page right">
-      <div className="mode-tabs">
-        <button
-          type="button"
-          className={mode === "toc" ? "active" : ""}
-          onClick={() => setMode("toc")}
-        >
-          目次
-        </button>
-        {!readOnly && (
-          <button
-            type="button"
-            className={mode === "write" ? "active" : ""}
-            onClick={() => setMode("write")}
-          >
-            書く
-          </button>
-        )}
-        <button
-          type="button"
-          className={mode === "search" ? "active" : ""}
-          onClick={() => setMode("search")}
-        >
-          探す
-        </button>
-        <button
-          type="button"
-          className={mode === "timeline" ? "active" : ""}
-          onClick={() => setMode("timeline")}
-        >
-          年表
-        </button>
-      </div>
-      <section className={`section${mode === "toc" ? " active" : ""}`}>
-        <h2>本の現在地</h2>
-        <p className="hint">いちばん新しい記録です。タブか左の目次からページを切り替えます。</p>
-        {latest ? (
-          <div className="result-card">
-            <div className="date">{latest.date}</div>
-            <b>{latest.title}</b>
-            <p className="hint" style={{ margin: 0 }}>
-              {latest.body || ""}
-            </p>
-            <Badges entry={latest} />
-          </div>
-        ) : (
-          <div className="empty">まだ記録がありません。最初の迷いを綴じてみましょう。</div>
-        )}
-      </section>
-      {!readOnly && (
-        <section className={`section${mode === "write" ? " active" : ""}`}>
-          <WriteSection
-            key={draft ? `draft-${draft.title}-${draft.body.length}` : "blank"}
-            allEntries={props.allEntries}
-            books={props.books}
-            initialDraft={draft}
-            onSave={async (data) => {
-              await props.onSaveEntry(data);
-              setDraft(null);
-            }}
-          />
-        </section>
+      {isWriteSpread ? (
+        <WriteSectionRight form={writeForm} />
+      ) : (
+        <>
+          <section className={`section${mode === "toc" ? " active" : ""}`}>
+            <h2>本の現在地</h2>
+            <p className="hint">いちばん新しい記録です。タブか左の目次からページを切り替えます。</p>
+            {latest ? (
+              <div className="result-card">
+                <div className="date">{latest.date}</div>
+                <b>{latest.title}</b>
+                <p className="hint" style={{ margin: 0 }}>
+                  {latest.body || ""}
+                </p>
+                <Badges entry={latest} />
+              </div>
+            ) : (
+              <div className="empty">まだ記録がありません。最初の迷いを綴じてみましょう。</div>
+            )}
+          </section>
+          <section className={`section${mode === "search" ? " active" : ""}`}>
+            <h2>この本から探す</h2>
+            <p className="hint">左ページの検索欄に入力すると、この本の記録から探せます。</p>
+            <div className="chips">
+              {["不安", "後悔", "挑戦", "決定"].map((w) => (
+                <button
+                  key={w}
+                  className="chip"
+                  type="button"
+                  onClick={() => {
+                    setInnerQuery(w);
+                    setMode("search");
+                  }}
+                >
+                  #{w}
+                </button>
+              ))}
+            </div>
+            <div className="results" style={{ marginTop: 12 }}>
+              {resultCards}
+            </div>
+          </section>
+          <section className={`section${mode === "timeline" ? " active" : ""}`}>
+            {timelineSection}
+          </section>
+        </>
       )}
-      <section className={`section${mode === "search" ? " active" : ""}`}>
-        <h2>この本から探す</h2>
-        <p className="hint">左ページの検索欄に入力すると、この本の記録から探せます。</p>
-        <div className="chips">
-          {["不安", "後悔", "挑戦", "決定"].map((w) => (
-            <button
-              key={w}
-              className="chip"
-              type="button"
-              onClick={() => {
-                setInnerQuery(w);
-                setMode("search");
-              }}
-            >
-              #{w}
-            </button>
-          ))}
-        </div>
-        <div className="results" style={{ marginTop: 12 }}>
-          {resultCards}
-        </div>
-      </section>
-      <section className={`section${mode === "timeline" ? " active" : ""}`}>
-        {timelineSection}
-      </section>
     </div>
   );
 
@@ -282,30 +328,7 @@ export function BookOverlay(props: Props) {
             phase === "opening" || phase === "flipping" || phase === "ready" ? " show" : ""
           }${phase === "ready" ? " content-ready" : ""}`}
         >
-          <div className="page left">
-            <span className={`shelf-badge ${book.shelf}`}>
-              {SHELF_LABEL[book.shelf]}
-              {readOnly ? " / 読み専用" : book.shelf === "mine" ? " / 非公開" : " / 仲間と共有"}
-            </span>
-            <h2>{book.title}</h2>
-            <p className="hint">
-              1ページ目。目次、本内検索、{readOnly ? "年表" : "書き込み"}の入口をまとめたホームです。
-            </p>
-            <label className="book-search">
-              <span>⌕</span>
-              <input
-                type="search"
-                placeholder="この本の中をフリーワード検索"
-                value={innerQuery}
-                onChange={(e) => {
-                  setInnerQuery(e.target.value);
-                  if (mode !== "search") setMode("search");
-                }}
-              />
-            </label>
-            {tocButtons}
-            <div className="results">{resultCards}</div>
-          </div>
+          {leftPage}
           {rightPage}
           {/* ペラペラめくれる装飾ページ(実データの断片入り) */}
           {Array.from({ length: 8 }).map((_, i) => {
