@@ -12,14 +12,9 @@
  * (タイトル・タグ・確信度・日付・保存)に分割。
  * BookOverlay 側で見開きの左右ページにそれぞれ差し込む想定。
  */
-<<<<<<< HEAD
 
 import { useEffect, useMemo, useState } from "react";
 
-=======
-import { useEffect, useState } from "react";
-import { motion } from "framer-motion";
->>>>>>> 13ae4137b784150070669be6ea62e6cd11e817e4
 import type { Book, Entry } from "../../lib/api";
 import { useSemanticRecall } from "../../lib/recall";
 import { addMonthsISO, todayISO } from "../../lib/dates";
@@ -56,10 +51,7 @@ export function useWriteForm({ allEntries, books, initialDraft, onSave }: UseWri
   const [resolveDate, setResolveDate] = useState("");
   const [status, setStatus] = useState("");
 
-<<<<<<< HEAD
 
-=======
->>>>>>> 13ae4137b784150070669be6ea62e6cd11e817e4
   // initialDraft が(onFix経由などで)新しく渡されたら、フォームに反映する。
   // 以前は key={} での再マウントで実現していたが、hook を左右ページで
   // 共有する都合上、明示的な同期に変更。
@@ -72,7 +64,6 @@ export function useWriteForm({ allEntries, books, initialDraft, onSave }: UseWri
     }
   }, [initialDraft]);
 
-<<<<<<< HEAD
   const recall = useMemo(() => {
     const text = body.trim();
     if (text.length < 12) return null;
@@ -80,11 +71,6 @@ export function useWriteForm({ allEntries, books, initialDraft, onSave }: UseWri
   }, [body, allEntries]);
 
 
-=======
-  // 召喚: サーバーの意味検索(embedding)。使えないときは bigram に自動フォールバック
-  const recall = useSemanticRecall(body, allEntries);
-
->>>>>>> 13ae4137b784150070669be6ea62e6cd11e817e4
   const recallBook = recall ? books.find((b) => b.id === recall.bookId) : null;
 
   const save = async () => {
@@ -162,11 +148,7 @@ export function WriteSectionLeft({ form }: { form: WriteForm }) {
           </>
         )}
       </div>
-<<<<<<< HEAD
     </>
-=======
-    </motion.div>
->>>>>>> 13ae4137b784150070669be6ea62e6cd11e817e4
   );
 }
 
@@ -232,11 +214,9 @@ export function WriteSectionRight({ form }: { form: WriteForm }) {
                 form.setResolveDate(addMonthsISO(todayISO(), 1));
               }
             }}
-            
           />{" "}
           日付は未定(6ヶ月後にたずねます)
         </label>
-        
       </div>
       <div className="lock-note">
         🔒 綴じた記録は編集できません。誤字などは<b>2分以内</b>
