@@ -60,10 +60,7 @@ export function BookOverlay(props: Props) {
     },
   });
 
-<<<<<<< HEAD
 
-=======
->>>>>>> 13ae4137b784150070669be6ea62e6cd11e817e4
   // アニメーション段階: cover表示 → 開く → フリップ → 本文表示
   const [phase, setPhase] = useState<"init" | "cover" | "opening" | "flipping" | "ready">("init");
   const [closing, setClosing] = useState(false);
@@ -328,10 +325,6 @@ export function BookOverlay(props: Props) {
             phase === "opening" || phase === "flipping" || phase === "ready" ? " show" : ""
           }${phase === "ready" ? " content-ready" : ""}`}
         >
-<<<<<<< HEAD
-
-=======
->>>>>>> 13ae4137b784150070669be6ea62e6cd11e817e4
           {leftPage}
           {rightPage}
           {/* ペラペラめくれる装飾ページ(実データの断片入り) */}
