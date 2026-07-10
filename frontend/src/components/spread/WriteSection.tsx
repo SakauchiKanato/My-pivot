@@ -12,15 +12,8 @@
  * (タイトル・タグ・確信度・日付・保存)に分割。
  * BookOverlay 側で見開きの左右ページにそれぞれ差し込む想定。
  */
-<<<<<<< HEAD
-
-
-import { useEffect, useMemo, useState } from "react";
-
-=======
 import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
->>>>>>> origin/main
 import type { Book, Entry } from "../../lib/api";
 import { useSemanticRecall } from "../../lib/recall";
 import { addMonthsISO, todayISO } from "../../lib/dates";
@@ -70,18 +63,8 @@ export function useWriteForm({ allEntries, books, initialDraft, onSave }: UseWri
     }
   }, [initialDraft]);
 
-<<<<<<< HEAD
-  const recall = useMemo(() => {
-    const text = body.trim();
-    if (text.length < 12) return null;
-    return bestRecall(text, allEntries);
-  }, [body, allEntries]);
-
-
-=======
   // 召喚: サーバーの意味検索(embedding)。使えないときは bigram に自動フォールバック
   const recall = useSemanticRecall(body, allEntries);
->>>>>>> origin/main
   const recallBook = recall ? books.find((b) => b.id === recall.bookId) : null;
 
   const save = async () => {
@@ -164,11 +147,7 @@ export function WriteSectionLeft({ form }: { form: WriteForm }) {
           </>
         )}
       </div>
-<<<<<<< HEAD
-    </>
-=======
     </motion.div>
->>>>>>> origin/main
   );
 }
 
