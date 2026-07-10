@@ -1,6 +1,15 @@
 /**
  * 本を開くオーバーレイ(v3 のアニメーションを移植)
  *
+ * v4での変更点:
+ * - モードタブ(目次/書く/探す/年表)を左ページ上部に固定表示。
+ *   ページ送り(スクロール)せずにどのモードからでも移動できるようにする。
+ * - mode === "write" のときは見開きを「書く」専用レイアウトに切り替え、
+ *   左ページに本文+recall(WriteSectionLeft)、
+ *   右ページにタイトル・タグ・確信度・日付・保存(WriteSectionRight)を表示する。
+ *   これにより本文を書きながらスクロールせずに全項目が見渡せる。
+ * - 上記以外のモード(目次/探す/年表)は従来どおり、
+ *   左ページ=本の基本情報+本内検索、右ページ=モードごとのセクション。
  * A-1 の受け皿: FLAGS.spreadLayout === "tabs" のとき現行構造。
  * "past_present"(左=過去/右=現在)を採用する場合、renderLeftPage /
  * renderRightPage の中身を組み替える。各セクションは独立コンポーネント
@@ -325,6 +334,7 @@ export function BookOverlay(props: Props) {
             phase === "opening" || phase === "flipping" || phase === "ready" ? " show" : ""
           }${phase === "ready" ? " content-ready" : ""}`}
         >
+
           {leftPage}
           {rightPage}
           {/* ペラペラめくれる装飾ページ(実データの断片入り) */}
