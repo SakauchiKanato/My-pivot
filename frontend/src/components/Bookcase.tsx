@@ -1,7 +1,9 @@
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { motion } from "framer-motion";
 import type { Book, Shelf } from "../lib/api";
 import { SharedAccessModal } from "./SharedAccessModal";
+import { KarakuriShelf, type KarakuriShelfHandle, pageOfIndex, SHELF_CAPACITY } from "./shelf/KarakuriShelf";
+import { flags } from "../config/flags";
 
 const SHELF_LABEL: Record<Shelf, string> = {
   mine: "わたしの書架",
@@ -67,6 +69,15 @@ export function Bookcase({
   const [openCats, setOpenCats] = useState<string[]>([]);
   const [sharedModalOpen, setSharedModalOpen] = useState(false);
   const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
+  const mineShelfRef = useRef<KarakuriShelfHandle>(null);
+  const sharedShelfRef = useRef<KarakuriShelfHandle>(null);
+  const senpaiShelfRef = useRef<KarakuriShelfHandle>(null);
+
+  const shelfRefs: Record<Shelf, React.RefObject<KarakuriShelfHandle>> = {
+    mine: mineShelfRef,
+    shared: sharedShelfRef,
+    senpai: senpaiShelfRef,
+  };
 
   // 追加フィルター
   const [filterShelves, setFilterShelves] = useState<Shelf[]>([]);
@@ -81,6 +92,14 @@ export function Bookcase({
       cache.set(b.id, { tags: bookTags(b), text: bookText(b) });
     });
     return cache;
+  }, [books]);
+
+  const booksByShelf = useMemo(() => {
+    return {
+      mine: books.filter((book) => book.shelf === "mine"),
+      shared: books.filter((book) => book.shelf === "shared"),
+      senpai: books.filter((book) => book.shelf === "senpai"),
+    };
   }, [books]);
 
   const allTags = useMemo(() => {
@@ -148,13 +167,39 @@ export function Bookcase({
 
   const hits = hasFilter ? books.filter(matches) : [];
 
-  const spine = (book: Book, dim: boolean) => (
+  const flashBook = (bookId: number) => {
+    const el = document.querySelector(`[data-book-id="${bookId}"]`);
+    if (!el) return;
+    el.classList.remove("kk-flash");
+    void (el as HTMLElement).offsetWidth;
+    el.classList.add("kk-flash");
+  };
+
+  const jumpToBook = (book: Book) => {
+    if (!flags.shelfPagination) {
+      onOpenBook(book);
+      return;
+    }
+
+    const shelfBooks = booksByShelf[book.shelf];
+    const shelfIndex = shelfBooks.findIndex((candidate) => candidate.id === book.id);
+    if (shelfIndex < 0) {
+      onOpenBook(book);
+      return;
+    }
+
+    const targetPage = pageOfIndex(shelfIndex, SHELF_CAPACITY);
+    shelfRefs[book.shelf].current?.jumpToPage(targetPage, () => flashBook(book.id));
+  };
+
+  const spine = (book: Book, dim: boolean, onClick: () => void = () => onOpenBook(book)) => (
     <button
       key={book.id}
       className={`book-spine${dim ? " dim" : ""}`}
+      data-book-id={book.id}
       type="button"
       style={{ height: book.height, background: book.fill }}
-      onClick={() => onOpenBook(book)}
+      onClick={onClick}
     >
       {book.title}
       <span className={`ribbon ${book.shelf}`} />
@@ -345,34 +390,75 @@ export function Bookcase({
         <div id="normalShelfView" className={hasFilter ? "hidden" : ""}>
           <div className="bookcase-container">
             {(["mine", "shared", "senpai"] as Shelf[]).map((shelfKey) => {
-              const booksHere = books.filter((b) => b.shelf === shelfKey);
-              const ROW_CAPACITY = 8;
-              const rows: JSX.Element[][] = [[], [], []];
-              let rowIndex = 0;
-              booksHere.forEach((b) => {
-                if (rows[rowIndex].length >= ROW_CAPACITY && rowIndex < 2) rowIndex++;
-                rows[rowIndex].push(spine(b, hasFilter && !matches(b)));
-              });
-              if (shelfKey !== "senpai") {
-                rows[booksHere.length % 3].push(
-                  <span key="new">{newBookButton(shelfKey)}</span>
+              const booksHere = booksByShelf[shelfKey];
+              if (!flags.shelfPagination) {
+                const ROW_CAPACITY = 8;
+                const rows: JSX.Element[][] = [[], [], []];
+                let rowIndex = 0;
+                booksHere.forEach((b) => {
+                  if (rows[rowIndex].length >= ROW_CAPACITY && rowIndex < 2) rowIndex++;
+                  rows[rowIndex].push(spine(b, hasFilter && !matches(b)));
+                });
+                if (shelfKey !== "senpai") {
+                  rows[booksHere.length % 3].push(
+                    <span key="new">{newBookButton(shelfKey)}</span>
+                  );
+                }
+                return (
+                  <div className="bookcase-col" key={shelfKey}>
+                    <div className="case-caption">
+                      <b>{SHELF_LABEL[shelfKey]}</b>
+                      <p className={`case-note ${shelfKey}`}>{CASE_NOTES[shelfKey]}</p>
+                    </div>
+                    <div className="bookcase">
+                      {rows.map((row, r) => (
+                        <div key={r}>
+                          <div className="shelf">{row}</div>
+                          <div className="shelf-board" />
+                        </div>
+                      ))}
+                    </div>
+                  </div>
                 );
               }
               return (
-                <div className="bookcase-col" key={shelfKey}>
-                  <div className="case-caption">
-                    <b>{SHELF_LABEL[shelfKey]}</b>
-                    <p className={`case-note ${shelfKey}`}>{CASE_NOTES[shelfKey]}</p>
-                  </div>
-                  <div className="bookcase">
-                    {rows.map((row, r) => (
-                      <div key={r}>
-                        <div className="shelf">{row}</div>
-                        <div className="shelf-board" />
-                      </div>
-                    ))}
-                  </div>
-                </div>
+                <KarakuriShelf
+                  key={shelfKey}
+                  ref={shelfRefs[shelfKey]}
+                  books={booksHere}
+                  enabled={flags.shelfPagination}
+                  hasAddSlot={shelfKey !== "senpai"}
+                  title={SHELF_LABEL[shelfKey]}
+                  note={CASE_NOTES[shelfKey]}
+                  className="bookcase-col"
+                  renderPage={(pageBooks, _pageIndex, isLastPage) => (
+                    (() => {
+                      const ROW_CAPACITY = 8;
+                      const rows: JSX.Element[][] = [[], [], []];
+                      let rowIndex = 0;
+                      pageBooks.forEach((book) => {
+                        if (rows[rowIndex].length >= ROW_CAPACITY && rowIndex < 2) rowIndex += 1;
+                        const dim = hasFilter && !matches(book);
+                        rows[rowIndex].push(spine(book, dim, () => jumpToBook(book)));
+                      });
+                      if (isLastPage && shelfKey !== "senpai") {
+                        rows[pageBooks.length % 3].push(
+                          <span key="new">{newBookButton(shelfKey)}</span>
+                        );
+                      }
+                      return (
+                        <>
+                          {rows.map((row, r) => (
+                            <div key={r}>
+                              <div className="shelf">{row}</div>
+                              <div className="shelf-board" />
+                            </div>
+                          ))}
+                        </>
+                      );
+                    })()
+                  )}
+                />
               );
             })}
           </div>
@@ -402,7 +488,7 @@ export function Bookcase({
             {[0, 1, 2].map((r) => (
               <div key={r}>
                 <div className="shelf">
-                  {hits.filter((_, i) => i % 3 === r).map((b) => spine(b, false))}
+                  {hits.filter((_, i) => i % 3 === r).map((b) => spine(b, false, () => jumpToBook(b)))}
                 </div>
                 <div className="shelf-board" />
               </div>

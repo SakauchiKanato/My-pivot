@@ -1,0 +1,612 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>My Pivot — 書庫（からくり書架 統合版）</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Shippori+Mincho:wght@500;600;700&family=Zen+Kaku+Gothic+New:wght@400;500;700&display=swap');
+
+:root{
+  --bg:#F7F5EF;
+  --ink:#1F1B16;
+  --muted:#948275;
+  --faint:#B9AFA3;
+  --line:#DDD6CA;
+  --gold:#B08A3E;
+  --green:#3E7A5E;
+  --sumire:#5F4FB3;
+  --wood-frame:#221D18;
+  --wood-board:#3A322A;
+  --darkness:#0A0806;      /* からくりの奥の暗闇 */
+  --regret:#B0453F;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+body{
+  background:var(--bg);
+  color:var(--ink);
+  font-family:'Zen Kaku Gothic New',sans-serif;
+  min-height:100vh;
+  padding:40px 4vw 80px;
+}
+@media (prefers-reduced-motion: reduce){
+  *,*::before,*::after{animation:none!important;transition:none!important}
+}
+
+/* ================= ヘッダー ================= */
+.top{
+  display:flex;
+  justify-content:space-between;
+  align-items:flex-start;
+  gap:24px;
+  flex-wrap:wrap;
+}
+.head-left h1{
+  font-family:'Shippori Mincho',serif;
+  font-size:30px;
+  letter-spacing:.35em;
+  font-weight:700;
+}
+.head-left .lede{
+  color:var(--muted);
+  font-size:13px;
+  letter-spacing:.12em;
+  margin-top:10px;
+}
+.head-left .who{
+  margin-top:16px;
+  display:flex;
+  align-items:center;
+  gap:12px;
+  color:var(--muted);
+  font-size:13px;
+  letter-spacing:.08em;
+}
+.ghost-btn{
+  border:1px solid var(--line);
+  background:#fff;
+  color:var(--ink);
+  font-family:inherit;
+  font-size:13px;
+  padding:8px 16px;
+  border-radius:4px;
+  cursor:pointer;
+}
+.ghost-btn:hover{border-color:var(--muted)}
+.head-right{
+  display:flex;
+  align-items:flex-start;
+  gap:14px;
+}
+.bell{
+  border:1px solid var(--line);
+  background:#fff;
+  border-radius:4px;
+  width:44px;height:40px;
+  font-size:17px;
+  cursor:pointer;
+  margin-top:14px;
+}
+.stats{
+  border:1px solid var(--line);
+  background:#fff;
+  padding:16px 20px 12px;
+  display:flex;
+  gap:26px;
+  cursor:pointer;
+}
+.stat{border-left:3px solid var(--green);padding-left:10px}
+.stat:nth-child(2){border-color:var(--gold)}
+.stat:nth-child(3){border-color:var(--sumire)}
+.stat b{font-size:24px;font-weight:700;display:block}
+.stat span{font-size:11px;color:var(--muted);letter-spacing:.05em}
+.stats-note{
+  grid-column:1/-1;
+  font-size:11px;color:var(--muted);
+  margin-top:6px;
+}
+.stats-wrap{display:flex;flex-direction:column;align-items:flex-end;gap:6px}
+.stats-link{font-size:11px;color:var(--muted);letter-spacing:.06em}
+
+/* ================= 検索 ================= */
+.search-row{
+  display:flex;
+  gap:12px;
+  margin-top:34px;
+}
+.search-box{
+  flex:1;
+  display:flex;
+  align-items:center;
+  gap:10px;
+  border:1.5px solid var(--ink);
+  background:#fff;
+  padding:12px 16px;
+}
+.search-box input{
+  flex:1;border:none;background:transparent;
+  font-family:inherit;font-size:14px;color:var(--ink);
+}
+.search-box input:focus{outline:none}
+.search-row .ghost-btn{align-self:stretch}
+
+/* 横断検索の結果（3棚・全書架ページを対象） */
+.search-results{
+  border:1px solid var(--line);
+  border-top:none;
+  background:#fff;
+  display:none;
+  padding:8px 0;
+}
+.search-results.show{display:block}
+.sr-item{
+  display:flex;align-items:center;gap:12px;
+  width:100%;text-align:left;
+  border:none;background:none;font-family:inherit;
+  padding:10px 18px;font-size:13.5px;color:var(--ink);cursor:pointer;
+}
+.sr-item:hover{background:#F3EFE6}
+.sr-shelf{
+  font-size:11px;color:#fff;border-radius:3px;padding:2px 8px;letter-spacing:.05em;
+}
+.sr-shelf.mine{background:var(--gold)}
+.sr-shelf.shared{background:#4A6FA5}
+.sr-shelf.senpai{background:var(--green)}
+.sr-page{font-size:11px;color:var(--muted);margin-left:auto}
+.sr-empty{padding:10px 18px;font-size:13px;color:var(--muted)}
+
+/* ================= 3書架 ================= */
+.stacks{
+  display:grid;
+  grid-template-columns:repeat(3,1fr);
+  gap:3vw;
+  margin-top:46px;
+}
+@media (max-width:1080px){.stacks{grid-template-columns:1fr;gap:60px}}
+
+.stack-head{
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  gap:14px;
+}
+.stack-head h2{
+  font-family:'Shippori Mincho',serif;
+  font-size:17px;
+  letter-spacing:.3em;
+  font-weight:700;
+}
+/* 書架名の両隣に置く三角ボタン */
+.tri{
+  background:none;border:none;
+  font-size:20px;
+  color:var(--faint);
+  cursor:pointer;
+  padding:4px 8px;
+  user-select:none;
+  transition:color .3s, transform .2s;
+  line-height:1;
+}
+.tri:hover{color:var(--ink);transform:scale(1.15)}
+.tri:focus-visible{outline:2px solid var(--gold);outline-offset:2px;border-radius:4px}
+.tri.off{opacity:.12;cursor:not-allowed;pointer-events:none}
+.stack-page{
+  font-size:11px;
+  color:var(--muted);
+  letter-spacing:.15em;
+  min-width:34px;
+  text-align:center;
+}
+.stack-note{
+  text-align:center;
+  font-size:12px;
+  color:var(--muted);
+  letter-spacing:.06em;
+  margin-top:10px;
+}
+.stack-note b{font-weight:700}
+.stack-note .k-mine{color:var(--gold)}
+.stack-note .k-shared{color:#4A6FA5}
+.stack-note .k-senpai{color:var(--green)}
+
+/* ---- からくり書架本体 ---- */
+.case{
+  margin-top:16px;
+  perspective:1000px;
+}
+.case-frame{
+  position:relative;
+  height:430px;
+  border:14px solid var(--wood-frame);
+  border-radius:6px;
+  background:var(--darkness);                 /* 奥の暗闇 */
+  box-shadow:inset 0 24px 50px rgba(0,0,0,.9), 0 18px 40px rgba(0,0,0,.28);
+  overflow:hidden;                            /* 隣のページは枠外に隠す */
+}
+.slider{
+  display:flex;
+  height:100%;
+  position:absolute;
+  left:0;top:0;
+  transform-style:preserve-3d;
+  /* 【横移動】0.8秒の引っ込み待ちの後、1.4秒かけてズズズと動く */
+  transition:transform 1.4s cubic-bezier(.76,0,.24,1) .8s;
+  transform:translateX(0);
+}
+.shelf-page{
+  height:100%;
+  flex:0 0 auto;
+  background:#241F19;
+  box-shadow:inset 0 0 60px rgba(0,0,0,.65);
+  display:flex;
+  flex-direction:column;
+  padding:18px 16px 14px;
+  /* 【前後】0.8秒かけて奥へ引っ込む／戻る */
+  transition:transform .8s cubic-bezier(.25,1,.5,1), opacity .8s, filter .8s;
+  transform:translateZ(0) scale(1);
+  opacity:1;
+}
+/* からくり作動中：全ページが奥の暗闇へ沈む */
+.slider.pull-back .shelf-page{
+  transform:translateZ(-280px) scale(.62);
+  opacity:.3;
+  filter:brightness(.6);
+}
+
+/* 棚板と本 */
+.board-row{
+  display:flex;
+  align-items:flex-end;
+  gap:7px;
+  height:150px;
+  border-bottom:11px solid var(--wood-board);
+  padding:0 6px 0;
+}
+.board{
+  height:110px;
+  border-bottom:11px solid var(--wood-board);
+}
+.book{
+  position:relative;
+  width:36px;
+  border:none;
+  border-radius:3px 4px 0 0;
+  cursor:pointer;
+  writing-mode:vertical-rl;
+  font-family:'Shippori Mincho',serif;
+  font-size:12px;
+  font-weight:600;
+  letter-spacing:.12em;
+  color:#F2EBDD;
+  padding-top:16px;
+  text-align:left;
+  box-shadow:inset -5px 0 8px rgba(0,0,0,.35);
+  transition:transform .25s ease;
+}
+.book:hover,.book:focus-visible{transform:translateY(-8px)}
+.book:focus-visible{outline:2px solid var(--gold);outline-offset:2px}
+.book::before{
+  content:"";
+  position:absolute;top:7px;left:5px;right:5px;height:2.5px;
+  background:rgba(255,255,255,.55);
+}
+.c1{background:linear-gradient(#2E4A66,#233A52);height:128px}
+.c2{background:linear-gradient(#5F4FB3,#473B87);height:120px}
+.c3{background:linear-gradient(#7A3247,#5C2536);height:124px}
+.c4{background:linear-gradient(#2F6650,#24503E);height:130px}
+.c5{background:linear-gradient(#6E5326,#54401E);height:118px}
+.c6{background:linear-gradient(#4A4E6E,#383B55);height:126px}
+.book.new{
+  background:transparent;
+  border:1.5px dashed #5A5044;
+  color:#8D8272;
+  box-shadow:none;
+  height:124px;
+  font-family:'Zen Kaku Gothic New',sans-serif;
+  font-weight:400;
+  font-size:11px;
+}
+.book.new:hover{border-color:var(--gold);color:var(--gold)}
+
+/* 検索結果ジャンプ時のフラッシュ */
+.book.flash{animation:flashPulse 1.6s ease}
+@keyframes flashPulse{
+  0%,100%{box-shadow:inset -5px 0 8px rgba(0,0,0,.35)}
+  25%,60%{box-shadow:0 0 0 3px var(--gold), 0 0 22px rgba(176,138,62,.8)}
+}
+
+footer{
+  margin-top:60px;
+  color:var(--faint);
+  font-size:11.5px;
+  letter-spacing:.06em;
+}
+</style>
+</head>
+<body>
+
+<div class="top">
+  <div class="head-left">
+    <h1>書 庫</h1>
+    <p class="lede">迷いを本に綴じ、時が来たら結果をたずね、判断の癖を計器で見る。</p>
+    <div class="who">
+      demo さんの書庫
+      <button class="ghost-btn">⏳ タイムライン</button>
+      <button class="ghost-btn">ログアウト</button>
+    </div>
+  </div>
+  <div class="head-right">
+    <button class="bell" aria-label="通知">🔔</button>
+    <div class="stats-wrap">
+      <div class="stats">
+        <div class="stat"><b>18</b><span>記録した決定</span></div>
+        <div class="stat"><b>2.9</b><span>平均の見込み</span></div>
+        <div class="stat"><b>80%</b><span>#決定の成功率</span></div>
+      </div>
+      <span class="stats-link">クリックで計器を開く →</span>
+    </div>
+  </div>
+</div>
+
+<div class="search-row">
+  <div class="search-box">
+    <span>⌕</span>
+    <input id="q" placeholder="フリーワード検索: タイトル・タグ・本文から探す(3つの棚を横断)" />
+  </div>
+  <button class="ghost-btn">▼ 詳細条件</button>
+  <button class="ghost-btn" onclick="document.getElementById('q').value='';runSearch('')">リセット</button>
+</div>
+<div class="search-results" id="results"></div>
+
+<div class="stacks" id="stacks"></div>
+
+<footer>統合プロトタイプ — 書架名の両隣の ◀ ▶ でからくり書架を切替（奥へ沈む → 暗闇を横滑り → 手前に戻る）。検索は3棚・すべての書架ページを横断します。</footer>
+
+<script>
+/* ============================================================
+   データ：表示はページ分割するが、検索は常に全冊を対象にする
+   ============================================================ */
+const CAPACITY = 6; // 1書架（1ページ）あたりの最大冊数
+
+const SHELVES = {
+  mine: {
+    label:'わたしの書架',
+    note:'<b class="k-mine">非公開。</b>ここに綴じた記録は、あなたにしか読めません。',
+    canAdd:true, addLabel:'＋ 新しい本',
+    books:[
+      {t:'進路の迷い',     c:'c1'},
+      {t:'研究室のこと',   c:'c2'},
+      {t:'技育祭の判断',   c:'c3'},
+      {t:'ハッカソン初参加',c:'c4'},
+      {t:'休む選択',       c:'c5'},
+      {t:'応募しなかった日',c:'c3'},
+      {t:'留学の検討',     c:'c6'},
+      {t:'健康の記録',     c:'c4'}
+    ]
+  },
+  shared: {
+    label:'共同の書架',
+    note:'<b class="k-shared">共同。</b>選んだ仲間とだけ、迷いを共有します。',
+    canAdd:true, addLabel:'＋ 新しい本',
+    books:[
+      {t:'共同開発メモ',        c:'c1'},
+      {t:'締切前の焦り',        c:'c6'},
+      {t:'発表の前夜',          c:'c2'},
+      {t:'ハッカソン開発2026-', c:'c4'},
+      {t:'研究',                c:'c3'},
+      {t:'AIエージェント作成',  c:'c1'},
+      {t:'チーム振り返り',      c:'c5'}
+    ]
+  },
+  senpai: {
+    label:'先達の書架',
+    note:'<b class="k-senpai">先達の記録。</b>読み専用。決定当時の生データが綴じられています。',
+    canAdd:false,
+    books:[
+      {t:'院進をやめた記録', c:'c4'},
+      {t:'研究室を変えた話', c:'c1'},
+      {t:'休学の一年',       c:'c5'}
+    ]
+  }
+};
+
+const state = {
+  mine:  {page:0, busy:false},
+  shared:{page:0, busy:false},
+  senpai:{page:0, busy:false}
+};
+const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+function pagesFor(key){
+  const b = SHELVES[key].books;
+  const pages = [];
+  for(let i=0;i<b.length;i+=CAPACITY) pages.push(b.slice(i,i+CAPACITY));
+  if(pages.length===0) pages.push([]);
+  return pages;
+}
+function escapeHtml(s){
+  return String(s).replace(/[&<>"']/g, ch => (
+    {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]
+  ));
+}
+
+/* ============================================================
+   3書架の構築（全ページを最初からスライダーに並べておく）
+   ============================================================ */
+function buildStacks(){
+  const root = document.getElementById('stacks');
+  root.innerHTML = '';
+  Object.keys(SHELVES).forEach(key=>{
+    const d = SHELVES[key];
+    const pages = pagesFor(key);
+    const n = pages.length;
+
+    const sec = document.createElement('section');
+    sec.className = 'stack';
+    sec.innerHTML =
+      '<div class="stack-head">' +
+        '<button class="tri" id="triL-'+key+'" aria-label="前の書架へ">◀</button>' +
+        '<h2>'+escapeHtml(d.label)+'</h2>' +
+        '<button class="tri" id="triR-'+key+'" aria-label="次の書架へ">▶</button>' +
+        (n>1 ? '<span class="stack-page" id="pg-'+key+'"></span>' : '') +
+      '</div>' +
+      '<p class="stack-note">'+d.note+'</p>' +
+      '<div class="case"><div class="case-frame">' +
+        '<div class="slider" id="slider-'+key+'" style="width:'+(n*100)+'%"></div>' +
+      '</div></div>';
+    root.appendChild(sec);
+
+    const slider = sec.querySelector('#slider-'+key);
+    pages.forEach((pageBooks, pi)=>{
+      const page = document.createElement('div');
+      page.className = 'shelf-page';
+      page.style.width = (100/n) + '%';
+
+      const row = document.createElement('div');
+      row.className = 'board-row';
+      pageBooks.forEach(b=>{
+        const gi = d.books.indexOf(b);
+        const btn = document.createElement('button');
+        btn.className = 'book ' + b.c;
+        btn.dataset.key = key;
+        btn.dataset.index = gi;
+        btn.textContent = b.t;
+        btn.addEventListener('click', ()=>alert('「'+b.t+'」を開く（プロトタイプ）'));
+        row.appendChild(btn);
+      });
+      if(d.canAdd && pi === n-1){
+        const nb = document.createElement('button');
+        nb.className = 'book new';
+        nb.textContent = d.addLabel;
+        nb.addEventListener('click', ()=>alert('新しい本をつくる（プロトタイプ）'));
+        row.appendChild(nb);
+      }
+      page.appendChild(row);
+      page.insertAdjacentHTML('beforeend','<div class="board"></div><div class="board"></div>');
+      slider.appendChild(page);
+    });
+
+    document.getElementById('triL-'+key).addEventListener('click', ()=>navigate(key,-1));
+    document.getElementById('triR-'+key).addEventListener('click', ()=>navigate(key, 1));
+    applyPosition(key, true);
+  });
+}
+
+function applyPosition(key, instant){
+  const slider = document.getElementById('slider-'+key);
+  const n = pagesFor(key).length;
+  if(instant){
+    const t = slider.style.transition;
+    slider.style.transition = 'none';
+    slider.style.transform = 'translateX(-'+(state[key].page*100/n)+'%)';
+    void slider.offsetWidth;
+    slider.style.transition = t || '';
+  }else{
+    slider.style.transform = 'translateX(-'+(state[key].page*100/n)+'%)';
+  }
+  updateArrows(key);
+}
+
+function updateArrows(key){
+  const n = pagesFor(key).length;
+  const p = state[key].page;
+  const L = document.getElementById('triL-'+key);
+  const R = document.getElementById('triR-'+key);
+  L.classList.toggle('off', !(n>1 && p>0));
+  R.classList.toggle('off', !(n>1 && p<n-1));
+  const pg = document.getElementById('pg-'+key);
+  if(pg) pg.textContent = (p+1)+' / '+n;
+}
+
+/* ============================================================
+   からくり作動：沈む(0.8s) → 横滑り(1.4s) → 手前に戻る
+   ============================================================ */
+function navigate(key, dir){
+  const st = state[key];
+  const n = pagesFor(key).length;
+  const next = st.page + dir;
+  if(st.busy || next<0 || next>=n) return;
+
+  st.page = next;
+
+  if(reducedMotion){
+    applyPosition(key, true);
+    return;
+  }
+
+  st.busy = true;
+  const slider = document.getElementById('slider-'+key);
+
+  // 【1】奥へ引っ込む
+  slider.classList.add('pull-back');
+  // 【2】横移動（CSS側の transition-delay 0.8s が待ってくれる）
+  applyPosition(key, false);
+  // 【3】横移動完了(0.8+1.4=2.2s)後、手前に戻す
+  setTimeout(()=>{ slider.classList.remove('pull-back'); }, 2200);
+  // 3.0秒後にロック解除
+  setTimeout(()=>{ st.busy = false; }, 3000);
+}
+
+/* ============================================================
+   横断検索：3棚・全書架ページの全冊が対象。
+   結果クリックで該当ページへからくり移動し、本を光らせる
+   ============================================================ */
+document.getElementById('q').addEventListener('input', e=>runSearch(e.target.value));
+
+function runSearch(raw){
+  const q = raw.trim();
+  const panel = document.getElementById('results');
+  if(!q){ panel.classList.remove('show'); panel.innerHTML=''; return; }
+
+  const hits = [];
+  Object.keys(SHELVES).forEach(key=>{
+    SHELVES[key].books.forEach((b,i)=>{
+      if(b.t.includes(q)) hits.push({key, index:i, title:b.t, page:Math.floor(i/CAPACITY)});
+    });
+  });
+
+  panel.classList.add('show');
+  if(hits.length===0){
+    panel.innerHTML = '<div class="sr-empty">「'+escapeHtml(q)+'」に一致する本はありません（3棚すべてを検索済み）</div>';
+    return;
+  }
+  panel.innerHTML = '';
+  hits.forEach(h=>{
+    const btn = document.createElement('button');
+    btn.className = 'sr-item';
+    btn.innerHTML =
+      '<span class="sr-shelf '+h.key+'">'+escapeHtml(SHELVES[h.key].label)+'</span>' +
+      '<span>'+escapeHtml(h.title)+'</span>' +
+      '<span class="sr-page">書架 '+(h.page+1)+'</span>';
+    btn.addEventListener('click', ()=>jumpTo(h));
+    panel.appendChild(btn);
+  });
+}
+
+function jumpTo(h){
+  const st = state[h.key];
+  const flash = ()=>{
+    const el = document.querySelector('.book[data-key="'+h.key+'"][data-index="'+h.index+'"]');
+    if(!el) return;
+    el.classList.remove('flash');
+    void el.offsetWidth;
+    el.classList.add('flash');
+  };
+  if(st.page === h.page || reducedMotion){
+    st.page = h.page;
+    applyPosition(h.key, true);
+    flash();
+    return;
+  }
+  if(st.busy) return;
+  const dir = (h.page > st.page) ? 1 : -1;
+  // 複数ページ差でも一度のからくりで直接目的ページへ
+  st.page = h.page - dir;        // navigateが+dirするので調整
+  navigate(h.key, dir);
+  setTimeout(flash, 2300);
+}
+
+buildStacks();
+</script>
+</body>
+</html>
