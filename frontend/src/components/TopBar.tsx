@@ -10,9 +10,10 @@ interface Props {
   onOpenMeter: () => void;
   onOpenDue: (entry: Entry) => void;
   onLogout: () => void;
+  onOpenTimeline: () => void;
 }
 
-export function TopBar({ user, stats, due, books, onOpenMeter, onOpenDue, onLogout }: Props) {
+export function TopBar({ user, stats, due, books, onOpenMeter, onOpenDue, onLogout, onOpenTimeline }: Props) {
   const [bellOpen, setBellOpen] = useState(false);
   const bellRef = useRef<HTMLDivElement>(null);
 
@@ -49,7 +50,10 @@ export function TopBar({ user, stats, due, books, onOpenMeter, onOpenDue, onLogo
         <p className="subtitle">迷いを本に綴じ、時が来たら結果をたずね、判断の癖を計器で見る。</p>
         <p className="user-chip" style={{ marginTop: 8 }}>
           {user.username} さんの書庫
-          <button className="plain" type="button" onClick={onLogout}>
+          <button className="plain" type="button" onClick={onOpenTimeline} style={{ marginLeft: 16 }}>
+            ⏳ タイムライン
+          </button>
+          <button className="plain" type="button" onClick={onLogout} style={{ marginLeft: 16 }}>
             ログアウト
           </button>
         </p>
