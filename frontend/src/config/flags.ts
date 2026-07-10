@@ -42,7 +42,12 @@ export const FLAGS = {
 
   /** デモ補助: ログインフォームにデモ資格情報を表示する */
   showDemoCredentials: true,
+
+  /** 書架ページネーション（からくり書架） */
+  shelfPagination: true,
 } as const;
+
+export const flags = FLAGS;
 
 /** サーバー側フラグ(GET /api/library で受け取り、上書き参照する) */
 export interface ServerFlags {

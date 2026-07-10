@@ -1,0 +1,129 @@
+/* karakuri.css — からくり書架
+   すべて kk- プレフィックス。既存のクラスとは衝突しない。フレームの見た目（色・角丸・影）は既存の書架フレームに合わせて調整してよい。
+   機構に必須なのは:
+   - .kk-frame の overflow:hidden と perspective（.kk-case）
+   - .kk-slider の transition（delayの0.8sが「沈み待ち」）
+   - .kk-pull-back .kk-page の transform/opacity */
+
+.kk-stack {
+  display: flex;
+  flex-direction: column;
+  width: min(345px, 100%);
+}
+
+/* ---- 書架名と三角ボタン ---- */
+.kk-head {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  flex-wrap: wrap;
+}
+.kk-title {
+  font-size: 13px;
+  letter-spacing: 3px;
+  font-weight: 600;
+  margin: 0;
+}
+.kk-tri {
+  background: none;
+  border: none;
+  font-size: 20px;
+  color: #b9afa3;
+  cursor: pointer;
+  padding: 4px 8px;
+  user-select: none;
+  line-height: 1;
+  transition: color 0.3s, transform 0.2s;
+}
+.kk-tri:hover {
+  color: #1f1b16;
+  transform: scale(1.15);
+}
+.kk-tri:focus-visible {
+  outline: 2px solid #b08a3e;
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+.kk-tri--off {
+  opacity: 0.12;
+  cursor: not-allowed;
+  pointer-events: none;
+}
+.kk-pageno {
+  font-size: 11px;
+  color: #948275;
+  letter-spacing: 0.15em;
+  min-width: 34px;
+  text-align: center;
+}
+.kk-note {
+  text-align: center;
+  font-size: 10.5px;
+  color: var(--muted);
+  letter-spacing: 0.8px;
+  line-height: 1.6;
+  margin: 10px 0 0;
+}
+
+/* ---- からくり機構 ---- */
+.kk-case {
+  margin-top: 10px;
+  perspective: 1000px; /* 沈み込みの奥行き */
+}
+.kk-frame {
+  position: relative;
+  border: 4px solid var(--shelf-frame);
+  background: var(--shelf-bg);
+  box-shadow: 0 9px 24px rgba(0, 0, 0, 0.16);
+  overflow: hidden; /* 隣の書架ページを枠外に隠す */
+}
+/* 埋まり切る前の静的表示。見た目は既存と同一にすること */
+.kk-frame--static {
+  height: auto;
+}
+
+.kk-slider {
+  display: flex;
+  position: relative;
+  transform-style: preserve-3d;
+  /* 【横移動】0.8sの「沈み待ち」の後、1.4sかけてズズズと動く */
+  transition: transform 1.4s cubic-bezier(0.76, 0, 0.24, 1) 0.8s;
+}
+.kk-page {
+  height: auto;
+  flex: 0 0 auto;
+  background: var(--shelf-bg);
+  /* 【前後】0.8sかけて奥へ引っ込む／戻る */
+  transition: transform 0.8s cubic-bezier(0.25, 1, 0.5, 1),
+              opacity 0.8s,
+              filter 0.8s;
+  transform: translateZ(0) scale(1);
+  opacity: 1;
+}
+/* からくり作動中: 全ページが奥の暗闇へ沈む */
+.kk-pull-back .kk-page {
+  transform: translateZ(-280px) scale(0.62);
+  opacity: 0.3;
+  filter: brightness(0.6);
+}
+
+/* ---- 検索ジャンプ時に本を光らせる（任意の本要素に付与） ---- */
+.kk-flash {
+  animation: kk-flash-pulse 1.6s ease;
+}
+@keyframes kk-flash-pulse {
+  0%, 100% { box-shadow: inset -5px 0 8px rgba(0, 0, 0, 0.35); }
+  25%, 60% {
+    box-shadow: 0 0 0 3px #b08a3e, 0 0 22px rgba(176, 138, 62, 0.8);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .kk-slider,
+  .kk-page,
+  .kk-tri {
+    transition: none !important;
+    animation: none !important;
+  }
+}
