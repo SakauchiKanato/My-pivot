@@ -1,31 +1,38 @@
 """
-データベース接続設定
-
-開発時は SQLite を使う（セットアップ不要・ファイル1つで完結）。
-本番でクラウドに載せる場合は DATABASE_URL を差し替えるだけでよい。
+データベース接続設定(旧版から移植)
+SQLite。DATABASE_URL 環境変数で差し替え可能。
 """
+import os
 from pathlib import Path
+
+from sqlalchemy import event
 from sqlmodel import SQLModel, create_engine, Session
 
-# このファイル (database.py) の場所を基準に backend/my_pivot.db を固定
-# → どのディレクトリから uvicorn を起動してもパスがズレない
 _DB_PATH = Path(__file__).resolve().parent.parent / "my_pivot.db"
-DATABASE_URL = f"sqlite:///{_DB_PATH}"
+DATABASE_URL = os.environ.get("DATABASE_URL", f"sqlite:///{_DB_PATH}")
 
-# check_same_thread=False は SQLite を FastAPI で使うための定番設定
 engine = create_engine(
     DATABASE_URL,
     echo=False,
-    connect_args={"check_same_thread": False},
+    # timeout: ロック競合時にすぐ落ちず最大15秒待つ(database is locked対策)
+    connect_args={"check_same_thread": False, "timeout": 15} if DATABASE_URL.startswith("sqlite") else {},
 )
+
+if DATABASE_URL.startswith("sqlite"):
+
+    @event.listens_for(engine, "connect")
+    def _set_sqlite_pragma(dbapi_conn, _record):
+        """WALモード: 読み書きの同時実行に強くする(AI機能で書き込みが増えたため)。"""
+        cur = dbapi_conn.cursor()
+        cur.execute("PRAGMA journal_mode=WAL")
+        cur.execute("PRAGMA busy_timeout=15000")
+        cur.close()
 
 
 def create_db_and_tables():
-    """アプリ起動時にテーブルを作成する。"""
     SQLModel.metadata.create_all(engine)
 
 
 def get_session():
-    """APIごとにDBセッションを渡すための依存関数。"""
     with Session(engine) as session:
         yield session

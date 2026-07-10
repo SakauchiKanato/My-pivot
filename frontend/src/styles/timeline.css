@@ -1,0 +1,24 @@
+/* 
+ * The Botanical Archive — Timeline Styles
+ * 書庫と知の樹脈テーマ
+ */
+
+/* フォント読み込み */
+@import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,600;1,400&display=swap');
+
+/* オーバーレイのスクロールバー */
+.timeline-overlay::-webkit-scrollbar {
+  width: 6px;
+}
+.timeline-overlay::-webkit-scrollbar-track {
+  background: #1a140f;
+}
+.timeline-overlay::-webkit-scrollbar-thumb {
+  background: #5c4033;
+  border-radius: 3px;
+}
+
+/* SVG幹（アニメーションはMotionで制御）*/
+.timeline-trunk-svg {
+  pointer-events: none;
+}

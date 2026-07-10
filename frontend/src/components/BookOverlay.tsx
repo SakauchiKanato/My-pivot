@@ -10,6 +10,10 @@
  *   これにより本文を書きながらスクロールせずに全項目が見渡せる。
  * - 上記以外のモード(目次/探す/年表)は従来どおり、
  *   左ページ=本の基本情報+本内検索、右ページ=モードごとのセクション。
+ * A-1 の受け皿: FLAGS.spreadLayout === "tabs" のとき現行構造。
+ * "past_present"(左=過去/右=現在)を採用する場合、renderLeftPage /
+ * renderRightPage の中身を組み替える。各セクションは独立コンポーネント
+ * なので、配置変更はこのファイル内で完結する。
  */
 import { useEffect, useMemo, useState } from "react";
 import type { Book, Entry } from "../lib/api";
