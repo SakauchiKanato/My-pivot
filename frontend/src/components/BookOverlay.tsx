@@ -44,11 +44,14 @@ interface Props {
   onAppend: (entryId: number, text: string) => Promise<void>;
   onWithdraw: (entry: Entry) => Promise<WriteDraft>;
   onPublish: Parameters<typeof TimelineSection>[0]["onPublish"];
+  onUpdateColor: (bookId: number, fill: string) => Promise<void>;
+  onDeleteBook: (bookId: number) => Promise<void>;
 }
 
 export function BookOverlay(props: Props) {
   const { book, onClose } = props;
   const readOnly = book.shelf === "senpai";
+  const deletable = book.shelf !== "mine";
   const entries = useMemo(
     () => [...book.entries].sort((a, b) => (a.date < b.date ? -1 : 1)),
     [book.entries]
@@ -58,6 +61,11 @@ export function BookOverlay(props: Props) {
   const [mode, setMode] = useState<Mode>(props.startMode ?? "toc");
   const [innerQuery, setInnerQuery] = useState("");
   const [draft, setDraft] = useState<WriteDraft | null>(null);
+  
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [editColor, setEditColor] = useState(book.fill);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [confirmDeleteModalOpen, setConfirmDeleteModalOpen] = useState(false);
 
   const writeForm = useWriteForm({
     allEntries: props.allEntries,
@@ -225,13 +233,22 @@ export function BookOverlay(props: Props) {
     <div className="page left">
       {modeTabs}
       {isWriteSpread ? (
-        <WriteSectionLeft form={writeForm} />
+        <div style={{ position: "relative", height: "100%" }}>
+          <WriteSectionLeft form={writeForm} />
+        </div>
       ) : (
         <>
-          <span className={`shelf-badge ${book.shelf}`}>
-            {SHELF_LABEL[book.shelf]}
-            {readOnly ? " / 読み専用" : book.shelf === "mine" ? " / 非公開" : " / 仲間と共有"}
-          </span>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+            <span className={`shelf-badge ${book.shelf}`}>
+              {SHELF_LABEL[book.shelf]}
+              {readOnly ? " / 読み専用" : book.shelf === "mine" ? " / 非公開" : " / 仲間と共有"}
+            </span>
+            {!readOnly && (
+              <button className="plain" style={{ fontSize: "12px" }} onClick={() => setSettingsOpen(true)}>
+                ⚙️ 設定
+              </button>
+            )}
+          </div>
           <h2>{book.title}</h2>
           <p className="hint">
             1ページ目。目次、本内検索、{readOnly ? "年表" : "書き込み"}の入口をまとめたホームです。
@@ -258,7 +275,9 @@ export function BookOverlay(props: Props) {
   const rightPage = (
     <div className="page right">
       {isWriteSpread ? (
-        <WriteSectionRight form={writeForm} />
+        <div style={{ position: "relative", height: "100%" }}>
+          <WriteSectionRight form={writeForm} />
+        </div>
       ) : (
         <>
           <section className={`section${mode === "toc" ? " active" : ""}`}>
@@ -369,6 +388,114 @@ export function BookOverlay(props: Props) {
         <button className="plain close-btn" type="button" style={{ display: "inline-flex" }} onClick={close}>
           ↩ 本棚に戻す
         </button>
+      )}
+      
+      {settingsOpen && (
+        <div id="sharedAccessModal" className="open" onClick={(e) => {
+          if ((e.target as HTMLElement).id === "sharedAccessModal") setSettingsOpen(false);
+        }}>
+          <div className="cal-box shared-access-box">
+            <button className="plain cal-close" type="button" onClick={() => setSettingsOpen(false)}>
+              ✕ 閉じる
+            </button>
+            <h2>本の設定</h2>
+            <div className="label">表紙の色</div>
+            <div style={{ display: "flex", gap: "8px", flexWrap: "wrap", marginBottom: "24px" }}>
+              {["#1f4f68", "#54432b", "#422a54", "#25413c", "#5a1730", "#38423b", "#4a3b32", "#2d3748"].map(c => (
+                <button
+                  key={c}
+                  type="button"
+                  style={{
+                    width: 32, height: 32, borderRadius: "50%", background: c,
+                    border: editColor === c ? "2px solid #fff" : "none",
+                    outline: editColor === c ? "2px solid #3b82f6" : "none"
+                  }}
+                  onClick={() => setEditColor(c)}
+                />
+              ))}
+            </div>
+            <div style={{ display: "flex", gap: "12px", marginBottom: "32px" }}>
+              <button className="plain dark" type="button" onClick={async () => {
+                await props.onUpdateColor(book.id, editColor);
+                setSettingsOpen(false);
+              }}>
+                色を保存する
+              </button>
+            </div>
+            
+            <hr style={{ borderColor: "rgba(255,255,255,0.1)", marginBottom: "24px" }} />
+
+            {deletable ? (
+              <>
+                <h2>本を焼却炉へ...？（本を削除する）</h2>
+                <div style={{ display: "flex", gap: "12px", flexDirection: "column" }}>
+                  <p style={{ fontSize: "12px", color: "#9ca3af", margin: 0 }}>
+                    ※一度灰になった本は、もう二度と元には戻せません。
+                  </p>
+                  <button 
+                    className="plain" 
+                    type="button" 
+                    style={{ color: "#ef4444", alignSelf: "flex-start" }}
+                    onClick={() => setConfirmDeleteModalOpen(true)}
+                  >
+                    {isDeleting ? "削除中..." : "この本を削除する"}
+                  </button>
+                </div>
+              </>
+            ) : (
+              <div style={{ display: "flex", gap: "12px", flexDirection: "column" }}>
+                <h2>本の削除はできません</h2>
+                <p style={{ fontSize: "12px", color: "#9ca3af", margin: 0 }}>
+                  わたしの書架は削除不可です。内容を残したまま使い続ける前提になっています。
+                </p>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+      
+      {confirmDeleteModalOpen && (
+        <div id="sharedAccessModal" className="open" onClick={(e) => {
+          if ((e.target as HTMLElement).id === "sharedAccessModal") setConfirmDeleteModalOpen(false);
+        }}>
+          <div className="cal-box shared-access-box">
+            <button className="plain cal-close" type="button" onClick={() => setConfirmDeleteModalOpen(false)}>
+              ✕ 閉じる
+            </button>
+            
+            <h2>本を焼却炉へ...？（削除の確認）</h2>
+            <div style={{ display: "flex", gap: "12px", flexDirection: "column" }}>
+              <p style={{ fontSize: "14px", color: "var(--ink)", margin: 0 }}>
+                本当にこの本を焼却しますか？
+              </p>
+              <p style={{ fontSize: "12px", color: "#9ca3af", margin: 0 }}>
+                ※一度灰になった本は、もう二度と元には戻せません。<br/>
+                ※記録されているデータも全て失われます。
+              </p>
+              <div style={{ display: "flex", gap: "12px", marginTop: "16px" }}>
+                <button 
+                  className="plain" 
+                  type="button" 
+                  style={{ color: "#ef4444" }}
+                  disabled={isDeleting}
+                  onClick={async () => {
+                    setIsDeleting(true);
+                    await props.onDeleteBook(book.id);
+                  }}
+                >
+                  {isDeleting ? "削除中..." : "削除する"}
+                </button>
+                <button 
+                  className="plain dark" 
+                  type="button" 
+                  onClick={() => setConfirmDeleteModalOpen(false)}
+                >
+                  キャンセル
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
       )}
     </section>
   );

@@ -291,6 +291,64 @@ def create_book(
     return serialize_book(book, [], viewer_id=user.id, reveal_passcode=True)
 
 
+class BookColorUpdate(BaseModel):
+    fill: str
+
+
+@router.put("/books/{book_id}/color")
+def update_book_color(
+    book_id: int,
+    data: BookColorUpdate,
+    session: Session = Depends(get_session),
+    user: User = Depends(get_current_user),
+):
+    book = session.get(Book, book_id)
+    if not book:
+        raise HTTPException(404, "本が見つかりません")
+    if book.owner_id != user.id:
+        raise HTTPException(403, "この本の色を変更する権限がありません")
+    book.fill = data.fill
+    session.add(book)
+    session.commit()
+    session.refresh(book)
+    return serialize_book(book, list(book.entries), viewer_id=user.id)
+
+
+@router.delete("/books/{book_id}")
+def delete_book(
+    book_id: int,
+    session: Session = Depends(get_session),
+    user: User = Depends(get_current_user),
+):
+    book = session.get(Book, book_id)
+    if not book:
+        raise HTTPException(404, "本が見つかりません")
+    if book.shelf == Shelf.MINE:
+        raise HTTPException(403, "わたしの書架は削除できません")
+    if book.owner_id != user.id:
+        raise HTTPException(403, "この本を削除する権限がありません")
+    # 削除前に依存するレコードを明示的に削除する
+    # 1. 共同の書架のメンバーシップ
+    from app.models import SharedMembership, EntryEmbedding
+    memberships = session.exec(select(SharedMembership).where(SharedMembership.book_id == book.id)).all()
+    for m in memberships:
+        session.delete(m)
+
+    # 2. 本に含まれる記録とその関連データ
+    for entry in list(book.entries):
+        for a in list(entry.appends):
+            session.delete(a)
+        entry.tags.clear()
+        emb_row = session.get(EntryEmbedding, entry.id)
+        if emb_row:
+            session.delete(emb_row)
+        session.delete(entry)
+
+    session.delete(book)
+    session.commit()
+    return {"ok": True}
+
+
 # ---------- 記録を綴じる ----------
 class EntryCreate(BaseModel):
     title: str
