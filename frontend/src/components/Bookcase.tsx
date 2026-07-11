@@ -47,16 +47,10 @@ interface Props {
   // タグ名→カテゴリ(バックエンドのLLM分類結果)。チップの折りたたみに使う
   tagCategories: Record<string, string>;
   onOpenBook: (book: Book) => void;
-<<<<<<< HEAD
-  onCreateBook: (shelf: Shelf, title: string) => void;
-  onCreateSharedBook: (title: string, passcode: string) => Promise<void>;
-  onJoinShared: (passcode: string) => Promise<void>;
-=======
   onCreateBook: (shelf: Shelf, title: string) => Promise<number | null | void>;
   onCreateSharedBook: (title: string, passcode: string) => Promise<number | null | void>;
   onJoinShared: (passcode: string) => Promise<number | null | void>;
   onDeleteBooks: (ids: number[]) => Promise<void>;
->>>>>>> f0de4c84d55df1a93af2cbf728ef0d0e7da62946
   overlayOpen: boolean;
 }
 
@@ -76,8 +70,6 @@ export function Bookcase({
   const [openCats, setOpenCats] = useState<string[]>([]);
   const [sharedModalOpen, setSharedModalOpen] = useState(false);
   const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
-<<<<<<< HEAD
-=======
   const [pendingJumpBookId, setPendingJumpBookId] = useState<number | null>(null);
   const [hitPage, setHitPage] = useState(0);
   const [declutterMode, setDeclutterMode] = useState(false);
@@ -88,7 +80,6 @@ export function Bookcase({
   const sharedShelfRef = useRef<KarakuriShelfHandle>(null);
   const senpaiShelfRef = useRef<KarakuriShelfHandle>(null);
   const hitScrollContainerRef = useRef<HTMLDivElement>(null);
->>>>>>> f0de4c84d55df1a93af2cbf728ef0d0e7da62946
 
   // 隠しコマンド(追加分): 検索欄に "##xxx" と打ってスペースを押すと発動する
   const [secretEffect, setSecretEffect] = useState<SecretEffect | null>(null);
@@ -174,20 +165,6 @@ export function Bookcase({
 
   const hits = hasFilter ? books.filter(matches) : [];
 
-<<<<<<< HEAD
-  const spine = (book: Book, dim: boolean) => (
-    <button
-      key={book.id}
-      className={`book-spine${dim ? " dim" : ""}`}
-      type="button"
-      style={{ height: book.height, background: book.fill }}
-      onClick={() => onOpenBook(book)}
-    >
-      {book.title}
-      <span className={`ribbon ${book.shelf}`} />
-    </button>
-  );
-=======
   const hitBookcaseCount = Math.max(1, Math.ceil(hits.length / 24));
   const showCarouselButtons = hitBookcaseCount > 1;
 
@@ -271,7 +248,6 @@ export function Bookcase({
       </button>
     );
   };
->>>>>>> f0de4c84d55df1a93af2cbf728ef0d0e7da62946
 
   const newBookButton = (shelf: Shelf) => (
     <button
@@ -574,17 +550,6 @@ export function Bookcase({
             {(["mine", "shared", "senpai"] as Shelf[]).map((shelfKey) => {
               const booksHere = books.filter((b) => b.shelf === shelfKey);
               const ROW_CAPACITY = 8;
-<<<<<<< HEAD
-              const rows: JSX.Element[][] = [[], [], []];
-              let rowIndex = 0;
-              booksHere.forEach((b) => {
-                if (rows[rowIndex].length >= ROW_CAPACITY && rowIndex < 2) rowIndex++;
-                rows[rowIndex].push(spine(b, hasFilter && !matches(b)));
-              });
-              if (shelfKey !== "senpai") {
-                rows[booksHere.length % 3].push(
-                  <span key="new">{newBookButton(shelfKey)}</span>
-=======
               if (!flags.shelfPagination) {
                 const rows: JSX.Element[][] = [[], [], []];
                 let rowIndex = 0;
@@ -612,7 +577,6 @@ export function Bookcase({
                       ))}
                     </div>
                   </div>
->>>>>>> f0de4c84d55df1a93af2cbf728ef0d0e7da62946
                 );
               }
               return (
@@ -679,17 +643,6 @@ export function Bookcase({
               先達
             </span>
           </div>
-<<<<<<< HEAD
-          <div className="bookcase">
-            {[0, 1, 2].map((r) => (
-              <div key={r}>
-                <div className="shelf">
-                  {hits.filter((_, i) => i % 3 === r).map((b) => spine(b, false))}
-                </div>
-                <div className="shelf-board" />
-              </div>
-            ))}
-=======
           <div style={{ position: "relative" }}>
             <div 
               ref={hitScrollContainerRef}
@@ -712,7 +665,6 @@ export function Bookcase({
                 );
               })}
             </div>
->>>>>>> f0de4c84d55df1a93af2cbf728ef0d0e7da62946
           </div>
         </div>
       </section>
