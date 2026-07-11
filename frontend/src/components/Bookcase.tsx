@@ -85,6 +85,10 @@ export function Bookcase({
   const [secretEffect, setSecretEffect] = useState<SecretEffect | null>(null);
   const [secretPhrase, setSecretPhrase] = useState<string>("");
 
+  // 隠しコマンド(追加分): 検索欄に "##xxx" と打ってスペースを押すと発動する
+  const [secretEffect, setSecretEffect] = useState<SecretEffect | null>(null);
+  const [secretPhrase, setSecretPhrase] = useState<string>("");
+
   // 追加フィルター
   const [filterShelves, setFilterShelves] = useState<Shelf[]>([]);
   const [filterOutcomes, setFilterOutcomes] = useState<string[]>([]);
