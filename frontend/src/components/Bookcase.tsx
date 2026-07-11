@@ -378,6 +378,7 @@ export function Bookcase({
             {(["mine", "shared", "senpai"] as Shelf[]).map((shelfKey) => {
               const booksHere = booksByShelf[shelfKey];
               const ROW_CAPACITY = 8;
+              const addRowIndex = Math.min(Math.floor(booksHere.length / ROW_CAPACITY), 2);
               const rows: JSX.Element[][] = [[], [], []];
               let rowIndex = 0;
               booksHere.forEach((b) => {
@@ -385,7 +386,7 @@ export function Bookcase({
                 rows[rowIndex].push(spine(b, hasFilter && !matches(b)));
               });
               if (shelfKey !== "senpai") {
-                rows[booksHere.length % 3].push(
+                rows[addRowIndex].push(
                   <span key="new">{newBookButton(shelfKey)}</span>
                 );
               }
