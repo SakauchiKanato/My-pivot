@@ -161,17 +161,18 @@ export function Bookcase({
     element.classList.add("kk-flash");
   };
 
+  // 作成/参加した本へ視線を誘導する(点滅)。
+  // 元コードは棚のページ送り(shelfPagination)前提だったが、その機能は
+  // 未実装のため、依存しない最小形にしている。ページ送り実装時に組み替える。
+  const [pendingJumpBookId, setPendingJumpBookId] = useState<number | null>(null);
+  void setPendingJumpBookId; // 呼び出し側(モーダル接続)は未実装。接続時にこの行を消す
   useEffect(() => {
-    if (!pendingJumpBookId || !flags.shelfPagination) return;
+    if (!pendingJumpBookId) return;
     const book = books.find((candidate) => candidate.id === pendingJumpBookId);
     if (!book) return;
-    const shelfBooks = booksByShelf[book.shelf];
-    const shelfIndex = shelfBooks.findIndex((candidate) => candidate.id === book.id);
-    if (shelfIndex < 0) return;
-    const targetPage = pageOfIndex(shelfIndex, SHELF_CAPACITY);
-    shelfRefs[book.shelf].current?.jumpToPage(targetPage, () => flashBook(book.id));
+    flashBook(book.id);
     setPendingJumpBookId(null);
-  }, [books, booksByShelf, pendingJumpBookId]);
+  }, [books, pendingJumpBookId]);
 
   const spine = (book: Book, dim: boolean) => (
     <button
