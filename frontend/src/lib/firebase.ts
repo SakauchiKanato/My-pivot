@@ -14,8 +14,7 @@ const firebaseConfig = {
 export const app = initializeApp(firebaseConfig);
 export const db = getDatabase(app);
 
-// Helper function to get lock ref for a book
-export const getBookLockRef = (bookId: number) => ref(db, `locks/${bookId}`);
+
 // Helper function to broadcast an update signal globally
 export const getGlobalUpdateRef = () => ref(db, `updates/global`);
 export const broadcastGlobalUpdate = () => {
