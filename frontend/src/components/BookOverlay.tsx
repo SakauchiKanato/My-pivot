@@ -51,6 +51,7 @@ interface Props {
 export function BookOverlay(props: Props) {
   const { book, onClose } = props;
   const readOnly = book.shelf === "senpai";
+  const deletable = book.shelf !== "mine";
   const entries = useMemo(
     () => [...book.entries].sort((a, b) => (a.date < b.date ? -1 : 1)),
     [book.entries]
@@ -423,21 +424,32 @@ export function BookOverlay(props: Props) {
             </div>
             
             <hr style={{ borderColor: "rgba(255,255,255,0.1)", marginBottom: "24px" }} />
-            
-            <h2>本を焼却炉へ...？（本を削除する）</h2>
-            <div style={{ display: "flex", gap: "12px", flexDirection: "column" }}>
-              <p style={{ fontSize: "12px", color: "#9ca3af", margin: 0 }}>
-                ※一度灰になった本は、もう二度と元には戻せません。
-              </p>
-              <button 
-                className="plain" 
-                type="button" 
-                style={{ color: "#ef4444", alignSelf: "flex-start" }}
-                onClick={() => setConfirmDeleteModalOpen(true)}
-              >
-                {isDeleting ? "削除中..." : "この本を削除する"}
-              </button>
-            </div>
+
+            {deletable ? (
+              <>
+                <h2>本を焼却炉へ...？（本を削除する）</h2>
+                <div style={{ display: "flex", gap: "12px", flexDirection: "column" }}>
+                  <p style={{ fontSize: "12px", color: "#9ca3af", margin: 0 }}>
+                    ※一度灰になった本は、もう二度と元には戻せません。
+                  </p>
+                  <button 
+                    className="plain" 
+                    type="button" 
+                    style={{ color: "#ef4444", alignSelf: "flex-start" }}
+                    onClick={() => setConfirmDeleteModalOpen(true)}
+                  >
+                    {isDeleting ? "削除中..." : "この本を削除する"}
+                  </button>
+                </div>
+              </>
+            ) : (
+              <div style={{ display: "flex", gap: "12px", flexDirection: "column" }}>
+                <h2>本の削除はできません</h2>
+                <p style={{ fontSize: "12px", color: "#9ca3af", margin: 0 }}>
+                  わたしの書架は削除不可です。内容を残したまま使い続ける前提になっています。
+                </p>
+              </div>
+            )}
           </div>
         </div>
       )}

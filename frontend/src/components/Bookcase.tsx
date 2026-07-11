@@ -67,6 +67,7 @@ export function Bookcase({
   onDeleteBooks,
   overlayOpen,
 }: Props) {
+  const canDeleteBook = (book: Book) => book.shelf !== "mine";
   const [query, setQuery] = useState("");
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
   const [openCats, setOpenCats] = useState<string[]>([]);
@@ -244,6 +245,7 @@ export function Bookcase({
         }}
         onClick={() => {
           if (declutterMode) {
+            if (!canDeleteBook(book)) return;
             setSelectedBookIds((prev) => {
               const next = new Set(prev);
               if (next.has(book.id)) next.delete(book.id);
@@ -280,6 +282,11 @@ export function Bookcase({
       ＋ 新しい本
     </button>
   );
+
+  const deletableSelectedIds = Array.from(selectedBookIds).filter((id) => {
+    const book = books.find((candidate) => candidate.id === id);
+    return book ? canDeleteBook(book) : false;
+  });
 
   return (
     <>
@@ -453,7 +460,7 @@ export function Bookcase({
         )}
       </section>
 
-      {declutterMode && selectedBookIds.size > 0 && (
+      {declutterMode && deletableSelectedIds.length > 0 && (
         <div style={{
           position: "fixed",
           bottom: "32px",
@@ -469,7 +476,7 @@ export function Bookcase({
           zIndex: 1000,
           border: "1px solid var(--line)"
         }}>
-          <span style={{ fontWeight: "bold", color: "var(--ink)" }}>{selectedBookIds.size} 冊を選択中</span>
+          <span style={{ fontWeight: "bold", color: "var(--ink)" }}>{deletableSelectedIds.length} 冊を削除対象として選択中</span>
           <button
             className="btn"
             style={{ background: "#ff4d4f", color: "white", padding: "8px 16px" }}
@@ -505,7 +512,7 @@ export function Bookcase({
                   disabled={isDeleting}
                   onClick={async () => {
                     setIsDeleting(true);
-                    await onDeleteBooks(Array.from(selectedBookIds));
+                    await onDeleteBooks(deletableSelectedIds);
                     setIsDeleting(false);
                     setSelectedBookIds(new Set());
                     setDeclutterMode(false);
@@ -546,7 +553,7 @@ export function Bookcase({
                   );
                 }
                 return (
-                  <div className="bookcase-col" key={shelfKey}>
+                    <div className="bookcase-col" key={shelfKey}>
                     <div className="case-caption">
                       <b>{SHELF_LABEL[shelfKey]}</b>
                       <p className={`case-note ${shelfKey}`}>{CASE_NOTES[shelfKey]}</p>
