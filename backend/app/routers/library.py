@@ -323,6 +323,8 @@ def delete_book(
     book = session.get(Book, book_id)
     if not book:
         raise HTTPException(404, "本が見つかりません")
+    if book.shelf == Shelf.MINE:
+        raise HTTPException(403, "わたしの書架は削除できません")
     if book.owner_id != user.id:
         raise HTTPException(403, "この本を削除する権限がありません")
     # 削除前に依存するレコードを明示的に削除する
