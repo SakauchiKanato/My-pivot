@@ -1,10 +1,7 @@
-import { useMemo, useRef, useState, useEffect } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { motion } from "framer-motion";
 import type { Book, Shelf } from "../lib/api";
 import { SharedAccessModal } from "./SharedAccessModal";
-import { CreateBookModal } from "./CreateBookModal";
-import { KarakuriShelf, type KarakuriShelfHandle, pageOfIndex, SHELF_CAPACITY } from "./shelf/KarakuriShelf";
-import { flags } from "../config/flags";
 
 const SHELF_LABEL: Record<Shelf, string> = {
   mine: "わたしの書架",
@@ -50,9 +47,9 @@ interface Props {
   // タグ名→カテゴリ(バックエンドのLLM分類結果)。チップの折りたたみに使う
   tagCategories: Record<string, string>;
   onOpenBook: (book: Book) => void;
-  onCreateBook: (shelf: Shelf, title: string) => Promise<number | null | void>;
-  onCreateSharedBook: (title: string, passcode: string) => Promise<number | null | void>;
-  onJoinShared: (passcode: string) => Promise<number | null | void>;
+  onCreateBook: (shelf: Shelf, title: string) => void;
+  onCreateSharedBook: (title: string, passcode: string) => Promise<void>;
+  onJoinShared: (passcode: string) => Promise<void>;
   overlayOpen: boolean;
 }
 
@@ -69,18 +66,11 @@ export function Bookcase({
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
   const [openCats, setOpenCats] = useState<string[]>([]);
   const [sharedModalOpen, setSharedModalOpen] = useState(false);
-  const [mineModalOpen, setMineModalOpen] = useState(false);
   const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
-  const [pendingJumpBookId, setPendingJumpBookId] = useState<number | null>(null);
-  const mineShelfRef = useRef<KarakuriShelfHandle>(null);
-  const sharedShelfRef = useRef<KarakuriShelfHandle>(null);
-  const senpaiShelfRef = useRef<KarakuriShelfHandle>(null);
 
-  const shelfRefs: Record<Shelf, React.RefObject<KarakuriShelfHandle>> = {
-    mine: mineShelfRef,
-    shared: sharedShelfRef,
-    senpai: senpaiShelfRef,
-  };
+  // 隠しコマンド(追加分): 検索欄に "##xxx" と打ってスペースを押すと発動する
+  const [secretEffect, setSecretEffect] = useState<SecretEffect | null>(null);
+  const [secretPhrase, setSecretPhrase] = useState<string>("");
 
   // 追加フィルター
   const [filterShelves, setFilterShelves] = useState<Shelf[]>([]);
@@ -95,14 +85,6 @@ export function Bookcase({
       cache.set(b.id, { tags: bookTags(b), text: bookText(b) });
     });
     return cache;
-  }, [books]);
-
-  const booksByShelf = useMemo(() => {
-    return {
-      mine: books.filter((book) => book.shelf === "mine"),
-      shared: books.filter((book) => book.shelf === "shared"),
-      senpai: books.filter((book) => book.shelf === "senpai"),
-    };
   }, [books]);
 
   const allTags = useMemo(() => {
@@ -170,54 +152,13 @@ export function Bookcase({
 
   const hits = hasFilter ? books.filter(matches) : [];
 
-  const flashBook = (bookId: number) => {
-    const el = document.querySelector(`[data-book-id="${bookId}"]`);
-    if (!el) return;
-    el.classList.remove("kk-flash");
-    void (el as HTMLElement).offsetWidth;
-    el.classList.add("kk-flash");
-  };
-  
-  useEffect(() => {
-    if (pendingJumpBookId && flags.shelfPagination) {
-      const book = books.find((b) => b.id === pendingJumpBookId);
-      if (book) {
-        const shelfBooks = books.filter(b => b.shelf === book.shelf);
-        const shelfIndex = shelfBooks.findIndex((candidate) => candidate.id === book.id);
-        if (shelfIndex >= 0) {
-          const targetPage = pageOfIndex(shelfIndex, SHELF_CAPACITY);
-          shelfRefs[book.shelf].current?.jumpToPage(targetPage, () => flashBook(book.id));
-        }
-        setPendingJumpBookId(null);
-      }
-    }
-  }, [books, pendingJumpBookId]);
-
-  const jumpToBook = (book: Book) => {
-    if (!flags.shelfPagination) {
-      onOpenBook(book);
-      return;
-    }
-
-    const shelfBooks = booksByShelf[book.shelf];
-    const shelfIndex = shelfBooks.findIndex((candidate) => candidate.id === book.id);
-    if (shelfIndex < 0) {
-      onOpenBook(book);
-      return;
-    }
-
-    const targetPage = pageOfIndex(shelfIndex, SHELF_CAPACITY);
-    shelfRefs[book.shelf].current?.jumpToPage(targetPage, () => flashBook(book.id));
-  };
-
-  const spine = (book: Book, dim: boolean, onClick: () => void = () => onOpenBook(book)) => (
+  const spine = (book: Book, dim: boolean) => (
     <button
       key={book.id}
       className={`book-spine${dim ? " dim" : ""}`}
-      data-book-id={book.id}
       type="button"
       style={{ height: book.height, background: book.fill }}
-      onClick={onClick}
+      onClick={() => onOpenBook(book)}
     >
       {book.title}
       <span className={`ribbon ${book.shelf}`} />
@@ -234,10 +175,8 @@ export function Bookcase({
           setSharedModalOpen(true);
           return;
         }
-        if (shelf === "mine") {
-          setMineModalOpen(true);
-          return;
-        }
+        const title = prompt("新しい本のタイトル(例: 就活の記録)");
+        if (title && title.trim()) onCreateBook(shelf, title.trim());
       }}
     >
       ＋ 新しい本
@@ -255,6 +194,32 @@ export function Bookcase({
               placeholder="フリーワード検索: タイトル・タグ・本文から探す(3つの棚を横断)"
               value={query}
               onChange={(e) => setQuery(e.target.value)}
+              onKeyDown={(e) => {
+                // 隠しコマンド: "##xxx" と打ってスペースを押すと発動する。
+                // 通常の検索ワードにスペースを使いたい場合もあるので、
+                // 一致したときだけ発動させ、それ以外は普通に空白として入力させる。
+                if (e.key === " ") {
+                  const typed = query.trim().toLowerCase();
+                  const hit = SECRET_COMMANDS.find((c) => c.pattern === typed);
+                  if (hit) {
+                    e.preventDefault();
+                    if (hit.effect === "silence") {
+                      const saved = window.localStorage.getItem("shoko-secret-phrase");
+                      if (saved) {
+                        setSecretPhrase(saved);
+                      } else {
+                        const input = window.prompt("画面に浮かべる、あなただけの言葉を決めてください。") ?? "";
+                        const phrase = input.trim();
+                        if (!phrase) return; // 何も入力されなければ発動しない
+                        window.localStorage.setItem("shoko-secret-phrase", phrase);
+                        setSecretPhrase(phrase);
+                      }
+                    }
+                    setSecretEffect(hit.effect);
+                    setQuery("");
+                  }
+                }
+              }}
             />
           </label>
           <button
@@ -410,74 +375,34 @@ export function Bookcase({
         <div id="normalShelfView" className={hasFilter ? "hidden" : ""}>
           <div className="bookcase-container">
             {(["mine", "shared", "senpai"] as Shelf[]).map((shelfKey) => {
-              const booksHere = booksByShelf[shelfKey];
+              const booksHere = books.filter((b) => b.shelf === shelfKey);
               const ROW_CAPACITY = 8;
-              if (!flags.shelfPagination) {
-                const rows: JSX.Element[][] = [[], [], []];
-                let rowIndex = 0;
-                booksHere.forEach((b) => {
-                  if (rows[rowIndex].length >= ROW_CAPACITY && rowIndex < 2) rowIndex++;
-                  rows[rowIndex].push(spine(b, hasFilter && !matches(b)));
-                });
-                if (shelfKey !== "senpai") {
-                  rows[Math.min(Math.floor(booksHere.length / ROW_CAPACITY), 2)].push(
-                    <span key="new">{newBookButton(shelfKey)}</span>
-                  );
-                }
-                return (
-                  <div className="bookcase-col" key={shelfKey}>
-                    <div className="case-caption">
-                      <b>{SHELF_LABEL[shelfKey]}</b>
-                      <p className={`case-note ${shelfKey}`}>{CASE_NOTES[shelfKey]}</p>
-                    </div>
-                    <div className="bookcase">
-                      {rows.map((row, r) => (
-                        <div key={r}>
-                          <div className="shelf">{row}</div>
-                          <div className="shelf-board" />
-                        </div>
-                      ))}
-                    </div>
-                  </div>
+              const rows: JSX.Element[][] = [[], [], []];
+              let rowIndex = 0;
+              booksHere.forEach((b) => {
+                if (rows[rowIndex].length >= ROW_CAPACITY && rowIndex < 2) rowIndex++;
+                rows[rowIndex].push(spine(b, hasFilter && !matches(b)));
+              });
+              if (shelfKey !== "senpai") {
+                rows[booksHere.length % 3].push(
+                  <span key="new">{newBookButton(shelfKey)}</span>
                 );
               }
               return (
-                <KarakuriShelf
-                  key={shelfKey}
-                  ref={shelfRefs[shelfKey]}
-                  books={booksHere}
-                  enabled={flags.shelfPagination}
-                  hasAddSlot={shelfKey !== "senpai"}
-                  title={SHELF_LABEL[shelfKey]}
-                  note={CASE_NOTES[shelfKey]}
-                  className="bookcase-col"
-                  renderPage={(pageBooks, _pageIndex, isLastPage) => (
-                    (() => {
-                      const rows: JSX.Element[][] = [[], [], []];
-                      let rowIndex = 0;
-                      pageBooks.forEach((book) => {
-                        if (rows[rowIndex].length >= ROW_CAPACITY && rowIndex < 2) rowIndex += 1;
-                        const dim = hasFilter && !matches(book);
-                        rows[rowIndex].push(spine(book, dim));
-                      });
-                      if (isLastPage && shelfKey !== "senpai") {
-                        rows[Math.min(Math.floor(pageBooks.length / ROW_CAPACITY), 2)].push(
-                          <span key="new">{newBookButton(shelfKey)}</span>
-                        );
-                      }
-                      return (
-                        <>
-                          {rows.map((row, r) => (
-                            <div key={r}>
-                              <div className="shelf">{row}</div>
-                              <div className="shelf-board" />
-                            </div>
-                          ))}
-                        </>
-                      );
-                    })()
-                  )}
-                />
+                <div className="bookcase-col" key={shelfKey}>
+                  <div className="case-caption">
+                    <b>{SHELF_LABEL[shelfKey]}</b>
+                    <p className={`case-note ${shelfKey}`}>{CASE_NOTES[shelfKey]}</p>
+                  </div>
+                  <div className="bookcase">
+                    {rows.map((row, r) => (
+                      <div key={r}>
+                        <div className="shelf">{row}</div>
+                        <div className="shelf-board" />
+                      </div>
+                    ))}
+                  </div>
+                </div>
               );
             })}
           </div>
@@ -503,48 +428,228 @@ export function Bookcase({
               先達
             </span>
           </div>
-          {Array.from({ length: Math.max(1, Math.ceil(hits.length / 24)) }).map((_, bookcaseIndex) => {
-            const bookcaseHits = hits.slice(bookcaseIndex * 24, (bookcaseIndex + 1) * 24);
-            return (
-              <div key={bookcaseIndex} className="bookcase" style={{ marginBottom: 40 }}>
-                {Array.from({ length: 3 }).map((_, r) => (
-                  <div key={r}>
-                    <div className="shelf">
-                      {bookcaseHits.slice(r * 8, (r + 1) * 8).map((b) => spine(b, false, () => onOpenBook(b)))}
-                    </div>
-                    <div className="shelf-board" />
-                  </div>
-                ))}
+          <div className="bookcase">
+            {[0, 1, 2].map((r) => (
+              <div key={r}>
+                <div className="shelf">
+                  {hits.filter((_, i) => i % 3 === r).map((b) => spine(b, false))}
+                </div>
+                <div className="shelf-board" />
               </div>
-            );
-          })}
+            ))}
+          </div>
         </div>
       </section>
 
       {sharedModalOpen && (
         <SharedAccessModal
           onClose={() => setSharedModalOpen(false)}
-          onCreate={async (t, p) => {
-            const id = await onCreateSharedBook(t, p);
-            if (id) setPendingJumpBookId(id);
-          }}
-          onJoin={async (p) => {
-            const id = await onJoinShared(p);
-            if (id) setPendingJumpBookId(id);
+          onCreate={onCreateSharedBook}
+          onJoin={onJoinShared}
+        />
+      )}
+
+      {secretEffect && (
+        <SecretEffectOverlay
+          effect={secretEffect}
+          phrase={secretPhrase}
+          onDone={() => setSecretEffect(null)}
+        />
+      )}
+    </>
+  );
+}
+
+// ====================================================================
+// 隠しコマンド(追加分)
+// 検索欄に "##season" "##candle" "##ink" "##paper" "##silence" のいずれか
+// を打ってスペースキーを押すと発動する。
+// ====================================================================
+
+type SecretEffect = "season" | "sakura" | "candle" | "ink" | "paper" | "silence";
+
+const SECRET_COMMANDS: { pattern: string; effect: SecretEffect }[] = [
+  { pattern: "##season", effect: "season" },
+  { pattern: "##sakura", effect: "sakura" },
+  { pattern: "##candle", effect: "candle" },
+  { pattern: "##ink", effect: "ink" },
+  { pattern: "##paper", effect: "paper" },
+  { pattern: "##silence", effect: "silence" },
+];
+
+type Season = "spring" | "summer" | "autumn" | "winter";
+
+function getSeason(date: Date = new Date()): Season {
+  const m = date.getMonth() + 1; // 1-12
+  if (m >= 3 && m <= 5) return "spring";
+  if (m >= 6 && m <= 8) return "summer";
+  if (m >= 9 && m <= 11) return "autumn";
+  return "winter";
+}
+
+const SEASON_PARTICLE: Record<Season, { glyph: string; count: number; duration: [number, number] }> = {
+  spring: { glyph: "🌸", count: 24, duration: [6, 10] },
+  summer: { glyph: "✦", count: 18, duration: [4, 7] },
+  autumn: { glyph: "🍁", count: 20, duration: [6, 10] },
+  winter: { glyph: "❄", count: 26, duration: [5, 9] },
+};
+
+function SecretEffectOverlay({
+  effect,
+  phrase,
+  onDone,
+}: {
+  effect: SecretEffect;
+  phrase: string;
+  onDone: () => void;
+}) {
+  // silence 以外は数秒で自動的に消える。silence はクリック/Escで閉じる。
+  useEffect(() => {
+    if (effect === "silence") return;
+    const t = window.setTimeout(onDone, 6000);
+    return () => window.clearTimeout(t);
+  }, [effect, onDone]);
+
+  useEffect(() => {
+    if (effect !== "silence") return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onDone();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [effect, onDone]);
+
+  return (
+    <div
+      className={`secret-overlay secret-${effect}`}
+      onClick={() => effect === "silence" && onDone()}
+      aria-hidden="true"
+      style={{
+        position: "fixed",
+        inset: 0,
+        zIndex: 9999,
+        pointerEvents: effect === "silence" ? "auto" : "none",
+        overflow: "hidden",
+      }}
+    >
+      <style>{`
+        @keyframes secretFall {
+          0%   { transform: translateY(-10vh) rotate(0deg); opacity: 0; }
+          10%  { opacity: 1; }
+          100% { transform: translateY(110vh) rotate(360deg); opacity: 0.9; }
+        }
+        @keyframes secretFlicker {
+          0%, 100% { opacity: 0.55; }
+          50% { opacity: 0.8; }
+        }
+        @keyframes secretInkGrow {
+          0%   { transform: scale(0); opacity: 0.9; }
+          100% { transform: scale(1); opacity: 0.35; }
+        }
+        @keyframes secretFadeIn {
+          0% { opacity: 0; }
+          100% { opacity: 1; }
+        }
+      `}</style>
+
+      {(effect === "season" || effect === "sakura") &&
+        (() => {
+          // ##sakura は季節判定を無視して、常に桜(spring)のパーティクルを使う
+          const season: Season = effect === "sakura" ? "spring" : getSeason();
+          const { glyph, count, duration } = SEASON_PARTICLE[season];
+          return Array.from({ length: count }).map((_, i) => {
+            const left = Math.random() * 100;
+            const dur = duration[0] + Math.random() * (duration[1] - duration[0]);
+            const delay = Math.random() * 3;
+            const size = 14 + Math.random() * 14;
+            return (
+              <span
+                key={i}
+                style={{
+                  position: "absolute",
+                  top: 0,
+                  left: `${left}vw`,
+                  fontSize: size,
+                  animation: `secretFall ${dur}s linear ${delay}s infinite`,
+                  filter: season === "summer" ? "drop-shadow(0 0 6px #ffe98a)" : undefined,
+                  color: season === "summer" ? "#ffe98a" : undefined,
+                }}
+              >
+                {glyph}
+              </span>
+            );
+          });
+        })()}
+
+      {effect === "candle" && (
+        <div
+          style={{
+            position: "absolute",
+            inset: 0,
+            background:
+              "radial-gradient(circle at 50% 45%, rgba(255,180,90,0.28), rgba(20,12,4,0.55) 70%)",
+            animation: "secretFlicker 2.4s ease-in-out infinite",
           }}
         />
       )}
 
-      {mineModalOpen && (
-        <CreateBookModal
-          shelf="mine"
-          onClose={() => setMineModalOpen(false)}
-          onCreate={async (t) => {
-            const id = await onCreateBook("mine", t);
-            if (id) setPendingJumpBookId(id);
+      {effect === "ink" && (
+        <div
+          style={{
+            position: "absolute",
+            top: "-20vh",
+            right: "-20vw",
+            width: "80vh",
+            height: "80vh",
+            borderRadius: "50%",
+            background: "radial-gradient(circle, rgba(20,20,30,0.85), rgba(20,20,30,0) 70%)",
+            animation: "secretInkGrow 2.6s ease-out forwards",
           }}
         />
       )}
-    </>
+
+      {effect === "paper" && (
+        <div
+          style={{
+            position: "absolute",
+            inset: 0,
+            background:
+              "linear-gradient(160deg, rgba(210,180,130,0.35), rgba(120,90,50,0.25)), " +
+              "radial-gradient(circle at 20% 30%, rgba(90,60,20,0.15), transparent 40%), " +
+              "radial-gradient(circle at 80% 70%, rgba(90,60,20,0.15), transparent 45%)",
+            mixBlendMode: "multiply",
+            animation: "secretFadeIn 1.4s ease-out",
+          }}
+        />
+      )}
+
+      {effect === "silence" && (
+        <div
+          style={{
+            position: "absolute",
+            inset: 0,
+            background: "#f6f2ea",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            padding: 40,
+            textAlign: "center",
+            animation: "secretFadeIn 1.2s ease-out",
+          }}
+        >
+          <p
+            style={{
+              fontSize: "clamp(18px, 3vw, 32px)",
+              letterSpacing: 1.2,
+              color: "#2b2620",
+              maxWidth: 640,
+              lineHeight: 1.8,
+            }}
+          >
+            {phrase}
+          </p>
+        </div>
+      )}
+    </div>
   );
 }
