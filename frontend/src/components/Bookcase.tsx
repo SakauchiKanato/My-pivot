@@ -1,7 +1,9 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { motion } from "framer-motion";
 import type { Book, Shelf } from "../lib/api";
 import { SharedAccessModal } from "./SharedAccessModal";
+import { KarakuriShelf, type KarakuriShelfHandle, pageOfIndex, SHELF_CAPACITY } from "./shelf/KarakuriShelf";
+import { flags } from "../config/flags";
 
 const SHELF_LABEL: Record<Shelf, string> = {
   mine: "わたしの書架",
@@ -165,14 +167,35 @@ export function Bookcase({
   // 元コードは棚のページ送り(shelfPagination)前提だったが、その機能は
   // 未実装のため、依存しない最小形にしている。ページ送り実装時に組み替える。
   const [pendingJumpBookId, setPendingJumpBookId] = useState<number | null>(null);
-  void setPendingJumpBookId; // 呼び出し側(モーダル接続)は未実装。接続時にこの行を消す
+  const mineShelfRef = useRef<KarakuriShelfHandle>(null);
+  const sharedShelfRef = useRef<KarakuriShelfHandle>(null);
+  const senpaiShelfRef = useRef<KarakuriShelfHandle>(null);
+
+  const shelfRefs: Record<Shelf, React.RefObject<KarakuriShelfHandle>> = {
+    mine: mineShelfRef,
+    shared: sharedShelfRef,
+    senpai: senpaiShelfRef,
+  };
+
+  const booksByShelf = useMemo(() => {
+    return {
+      mine: books.filter((book) => book.shelf === "mine"),
+      shared: books.filter((book) => book.shelf === "shared"),
+      senpai: books.filter((book) => book.shelf === "senpai"),
+    };
+  }, [books]);
+
   useEffect(() => {
-    if (!pendingJumpBookId) return;
+    if (!pendingJumpBookId || !flags.shelfPagination) return;
     const book = books.find((candidate) => candidate.id === pendingJumpBookId);
     if (!book) return;
-    flashBook(book.id);
+    const shelfBooks = booksByShelf[book.shelf];
+    const shelfIndex = shelfBooks.findIndex((candidate) => candidate.id === book.id);
+    if (shelfIndex < 0) return;
+    const targetPage = pageOfIndex(shelfIndex, SHELF_CAPACITY);
+    shelfRefs[book.shelf].current?.jumpToPage(targetPage, () => flashBook(book.id));
     setPendingJumpBookId(null);
-  }, [books, pendingJumpBookId]);
+  }, [books, booksByShelf, pendingJumpBookId]);
 
   const spine = (book: Book, dim: boolean) => (
     <button
@@ -398,35 +421,42 @@ export function Bookcase({
         <div id="normalShelfView" className={hasFilter ? "hidden" : ""}>
           <div className="bookcase-container">
             {(["mine", "shared", "senpai"] as Shelf[]).map((shelfKey) => {
-              const booksHere = books.filter((b) => b.shelf === shelfKey);
+              const booksHere = booksByShelf[shelfKey];
               const ROW_CAPACITY = 8;
-              const addRowIndex = Math.min(Math.floor(booksHere.length / ROW_CAPACITY), 2);
-              const rows: JSX.Element[][] = [[], [], []];
-              let rowIndex = 0;
-              booksHere.forEach((b) => {
-                if (rows[rowIndex].length >= ROW_CAPACITY && rowIndex < 2) rowIndex++;
-                rows[rowIndex].push(spine(b, hasFilter && !matches(b)));
-              });
-              if (shelfKey !== "senpai") {
-                rows[addRowIndex].push(
-                  <span key="new">{newBookButton(shelfKey)}</span>
-                );
-              }
               return (
-                <div className="bookcase-col" key={shelfKey}>
-                  <div className="case-caption">
-                    <b>{SHELF_LABEL[shelfKey]}</b>
-                    <p className={`case-note ${shelfKey}`}>{CASE_NOTES[shelfKey]}</p>
-                  </div>
-                  <div className="bookcase">
-                    {rows.map((row, r) => (
-                      <div key={r}>
-                        <div className="shelf">{row}</div>
-                        <div className="shelf-board" />
-                      </div>
-                    ))}
-                  </div>
-                </div>
+                <KarakuriShelf
+                  key={shelfKey}
+                  ref={shelfRefs[shelfKey]}
+                  books={booksHere}
+                  enabled={flags.shelfPagination}
+                  hasAddSlot={shelfKey !== "senpai"}
+                  title={SHELF_LABEL[shelfKey]}
+                  note={CASE_NOTES[shelfKey]}
+                  className="bookcase-col"
+                  renderPage={(pageBooks, _pageIndex, isLastPage) => {
+                    const rows: JSX.Element[][] = [[], [], []];
+                    let rowIndex = 0;
+                    pageBooks.forEach((book) => {
+                      if (rows[rowIndex].length >= ROW_CAPACITY && rowIndex < 2) rowIndex += 1;
+                      rows[rowIndex].push(spine(book, hasFilter && !matches(book)));
+                    });
+                    if (isLastPage && shelfKey !== "senpai") {
+                      rows[Math.min(Math.floor(pageBooks.length / ROW_CAPACITY), 2)].push(
+                        <span key="new">{newBookButton(shelfKey)}</span>
+                      );
+                    }
+                    return (
+                      <>
+                        {rows.map((row, r) => (
+                          <div key={r}>
+                            <div className="shelf">{row}</div>
+                            <div className="shelf-board" />
+                          </div>
+                        ))}
+                      </>
+                    );
+                  }}
+                />
               );
             })}
           </div>
@@ -468,8 +498,14 @@ export function Bookcase({
       {sharedModalOpen && (
         <SharedAccessModal
           onClose={() => setSharedModalOpen(false)}
-          onCreate={onCreateSharedBook}
-          onJoin={onJoinShared}
+          onCreate={async (title, passcode) => {
+            const id = await onCreateSharedBook(title, passcode);
+            if (id) setPendingJumpBookId(id);
+          }}
+          onJoin={async (passcode) => {
+            const id = await onJoinShared(passcode);
+            if (id) setPendingJumpBookId(id);
+          }}
         />
       )}
 
