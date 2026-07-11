@@ -323,8 +323,27 @@ def delete_book(
     book = session.get(Book, book_id)
     if not book:
         raise HTTPException(404, "本が見つかりません")
+    if book.shelf == Shelf.MINE:
+        raise HTTPException(403, "わたしの書架は削除できません")
     if book.owner_id != user.id:
         raise HTTPException(403, "この本を削除する権限がありません")
+    # 削除前に依存するレコードを明示的に削除する
+    # 1. 共同の書架のメンバーシップ
+    from app.models import SharedMembership, EntryEmbedding
+    memberships = session.exec(select(SharedMembership).where(SharedMembership.book_id == book.id)).all()
+    for m in memberships:
+        session.delete(m)
+
+    # 2. 本に含まれる記録とその関連データ
+    for entry in list(book.entries):
+        for a in list(entry.appends):
+            session.delete(a)
+        entry.tags.clear()
+        emb_row = session.get(EntryEmbedding, entry.id)
+        if emb_row:
+            session.delete(emb_row)
+        session.delete(entry)
+
     session.delete(book)
     session.commit()
     return {"ok": True}

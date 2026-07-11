@@ -10,3 +10,17 @@ services:
         value: postgresql://my_pivot_db_user:UuLuMzKCcAeOte6nTf2UFmGtNFRyjZyw@dpg-d98jg2vaqgkc73dorjc0-a/my_pivot_db
       - key: PYTHON_VERSION
         value: 3.12.0
+      - key: VITE_FIREBASE_API_KEY
+        value: AIzaSyAQkQoaUoEbngBUKA33gwlv325vUO7cmqs
+      - key: VITE_FIREBASE_AUTH_DOMAIN
+        value: my-pivot-5ff68.firebaseapp.com
+      - key: VITE_FIREBASE_PROJECT_ID
+        value: my-pivot-5ff68
+      - key: VITE_FIREBASE_STORAGE_BUCKET
+        value: my-pivot-5ff68.firebasestorage.app
+      - key: VITE_FIREBASE_MESSAGING_SENDER_ID
+        value: 18617231188
+      - key: VITE_FIREBASE_APP_ID
+        value: 1:18617231188:web:7790f5c1fe413d4aea0ac1
+      - key: VITE_FIREBASE_DATABASE_URL
+        value: https://my-pivot-5ff68-default-rtdb.firebaseio.com
