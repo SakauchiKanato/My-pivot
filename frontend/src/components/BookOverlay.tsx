@@ -51,7 +51,7 @@ interface Props {
 export function BookOverlay(props: Props) {
   const { book, onClose } = props;
   const readOnly = book.shelf === "senpai";
-  const deletable = book.shelf !== "mine";
+  const deletable = book.shelf !== "mine" || book.entries.length === 0;
   const entries = useMemo(
     () => [...book.entries].sort((a, b) => (a.date < b.date ? -1 : 1)),
     [book.entries]

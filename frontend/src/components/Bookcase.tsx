@@ -50,9 +50,10 @@ interface Props {
   // タグ名→カテゴリ(バックエンドのLLM分類結果)。チップの折りたたみに使う
   tagCategories: Record<string, string>;
   onOpenBook: (book: Book) => void;
-  onCreateBook: (shelf: Shelf, title: string) => void;
-  onCreateSharedBook: (title: string, passcode: string) => Promise<void>;
-  onJoinShared: (passcode: string) => Promise<void>;
+  onCreateBook: (shelf: Shelf, title: string) => Promise<number | null | void>;
+  onCreateSharedBook: (title: string, passcode: string) => Promise<number | null | void>;
+  onJoinShared: (passcode: string) => Promise<number | null | void>;
+  onDeleteBooks: (ids: number[]) => Promise<void>;
   overlayOpen: boolean;
 }
 

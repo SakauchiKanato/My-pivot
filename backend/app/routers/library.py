@@ -323,10 +323,10 @@ def delete_book(
     book = session.get(Book, book_id)
     if not book:
         raise HTTPException(404, "本が見つかりません")
-    if book.shelf == Shelf.MINE:
-        raise HTTPException(403, "わたしの書架は削除できません")
     if book.owner_id != user.id:
         raise HTTPException(403, "この本を削除する権限がありません")
+    if book.shelf == Shelf.MINE and len(book.entries) > 0:
+        raise HTTPException(403, "記録が入ったわたしの書架は削除できません")
     # 削除前に依存するレコードを明示的に削除する
     # 1. 共同の書架のメンバーシップ
     from app.models import SharedMembership, EntryEmbedding
