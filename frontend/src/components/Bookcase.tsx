@@ -153,9 +153,30 @@ export function Bookcase({
 
   const hits = hasFilter ? books.filter(matches) : [];
 
+  const flashBook = (bookId: number) => {
+    const element = document.querySelector(`[data-book-id="${bookId}"]`);
+    if (!element) return;
+    element.classList.remove("kk-flash");
+    void (element as HTMLElement).offsetWidth;
+    element.classList.add("kk-flash");
+  };
+
+  useEffect(() => {
+    if (!pendingJumpBookId || !flags.shelfPagination) return;
+    const book = books.find((candidate) => candidate.id === pendingJumpBookId);
+    if (!book) return;
+    const shelfBooks = booksByShelf[book.shelf];
+    const shelfIndex = shelfBooks.findIndex((candidate) => candidate.id === book.id);
+    if (shelfIndex < 0) return;
+    const targetPage = pageOfIndex(shelfIndex, SHELF_CAPACITY);
+    shelfRefs[book.shelf].current?.jumpToPage(targetPage, () => flashBook(book.id));
+    setPendingJumpBookId(null);
+  }, [books, booksByShelf, pendingJumpBookId]);
+
   const spine = (book: Book, dim: boolean) => (
     <button
       key={book.id}
+      data-book-id={book.id}
       className={`book-spine${dim ? " dim" : ""}`}
       type="button"
       style={{ height: book.height, background: book.fill }}
