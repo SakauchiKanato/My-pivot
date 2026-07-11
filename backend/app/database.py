@@ -31,6 +31,37 @@ if DATABASE_URL.startswith("sqlite"):
 
 def create_db_and_tables():
     SQLModel.metadata.create_all(engine)
+    repair_postgres_sequences()
+
+
+def repair_postgres_sequences():
+    """
+    Postgresの自動採番のズレを起動時に自動修復する(冪等)。
+
+    既存データをID込みで移行するとシーケンスが進まず、新規INSERTが
+    "duplicate key value violates unique constraint" で落ちる。
+    起動のたびに各テーブルの採番を MAX(id)+1 へ合わせて防ぐ。
+    """
+    if not DATABASE_URL.startswith("postgresql"):
+        return
+    from sqlalchemy import text
+
+    tables = ["user", "book", "entry", "tag", "entryappend", "biascheck"]
+    try:
+        with engine.begin() as conn:
+            for t in tables:
+                quoted = f'"{t}"'
+                seq = conn.execute(
+                    text("SELECT pg_get_serial_sequence(:tbl, 'id')"), {"tbl": quoted}
+                ).scalar()
+                if not seq:
+                    continue
+                max_id = conn.execute(text(f"SELECT COALESCE(MAX(id), 0) FROM {quoted}")).scalar()
+                conn.execute(text("SELECT setval(:seq, :val, false)"), {"seq": seq, "val": max_id + 1})
+        print("[db] Postgresの採番シーケンスを確認・修復しました")
+    except Exception as e:
+        # 修復失敗でも起動は止めない
+        print(f"[db] シーケンス修復をスキップ: {e}")
 
 
 def get_session():
