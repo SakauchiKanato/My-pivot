@@ -22,8 +22,6 @@ import { FLAGS } from "../config/flags";
 import { Badges } from "./spread/Badges";
 import { useWriteForm, WriteSectionLeft, WriteSectionRight, type WriteDraft } from "./spread/WriteSection";
 import { TimelineSection } from "./spread/TimelineSection";
-import { useBookLock } from "../lib/useBookLock";
-import { getAuthUser } from "../lib/auth";
 
 type Mode = "toc" | "write" | "search" | "timeline";
 const SHELF_LABEL: Record<string, string> = {
@@ -193,9 +191,6 @@ export function BookOverlay(props: Props) {
 
   /* A-1 分岐点: "past_present" 採用時はここを組み替える */
   const isWriteSpread = mode === "write" && !readOnly;
-  const lockStatus = useBookLock(book.id, isWriteSpread);
-  const currentUser = getAuthUser();
-  const isLockedByOther = lockStatus.lockedBy !== null && lockStatus.lockedBy !== String(currentUser?.userId);
 
   // 目次/書く/探す/年表: どのモードからでも移動できるよう左ページ上部に固定表示
   const modeTabs = (
@@ -239,18 +234,6 @@ export function BookOverlay(props: Props) {
       {isWriteSpread ? (
         <div style={{ position: "relative", height: "100%" }}>
           <WriteSectionLeft form={writeForm} />
-          {isLockedByOther && (
-            <div style={{
-              position: "absolute", top: 0, left: 0, right: 0, bottom: 0,
-              backgroundColor: "rgba(255,255,255,0.7)", zIndex: 10,
-              display: "flex", alignItems: "center", justifyContent: "center",
-              backdropFilter: "blur(2px)",
-              flexDirection: "column", gap: "8px"
-            }}>
-              <span style={{ fontSize: "2rem" }}>🔒</span>
-              <b style={{ color: "var(--ink)" }}>{lockStatus.lockedByName} さんが編集中です</b>
-            </div>
-          )}
         </div>
       ) : (
         <>
@@ -293,18 +276,6 @@ export function BookOverlay(props: Props) {
       {isWriteSpread ? (
         <div style={{ position: "relative", height: "100%" }}>
           <WriteSectionRight form={writeForm} />
-          {isLockedByOther && (
-            <div style={{
-              position: "absolute", top: 0, left: 0, right: 0, bottom: 0,
-              backgroundColor: "rgba(255,255,255,0.7)", zIndex: 10,
-              display: "flex", alignItems: "center", justifyContent: "center",
-              backdropFilter: "blur(2px)",
-              flexDirection: "column", gap: "8px"
-            }}>
-              <span style={{ fontSize: "2rem" }}>🚫</span>
-              <b style={{ color: "var(--ink)" }}>現在編集できません</b>
-            </div>
-          )}
         </div>
       ) : (
         <>
