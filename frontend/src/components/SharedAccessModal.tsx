@@ -2,8 +2,9 @@ import { useState } from "react";
 
 interface Props {
   onClose: () => void;
-  onCreate: (title: string, passcode: string) => Promise<void>;
-  onJoin: (passcode: string) => Promise<void>;
+  // 戻り値(作成/参加した本のid)は使わないが、渡すハンドラが返すことを許容する
+  onCreate: (title: string, passcode: string) => Promise<number | null | void>;
+  onJoin: (passcode: string) => Promise<number | null | void>;
 }
 
 type Mode = "choose" | "create" | "join";
