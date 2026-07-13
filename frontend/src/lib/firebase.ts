@@ -1,5 +1,6 @@
 import { initializeApp } from "firebase/app";
 import { getDatabase, ref, onValue, set, onDisconnect, remove } from "firebase/database";
+import { getAuth, GoogleAuthProvider, signInWithPopup } from "firebase/auth";
 
 const firebaseConfig = {
   apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
@@ -13,6 +14,13 @@ const firebaseConfig = {
 
 export const app = initializeApp(firebaseConfig);
 export const db = getDatabase(app);
+export const auth = getAuth(app);
+
+// Googleサインイン → バックエンド検証用のIDトークンを返す
+export async function signInWithGoogle(): Promise<string> {
+  const result = await signInWithPopup(auth, new GoogleAuthProvider());
+  return result.user.getIdToken();
+}
 
 
 // Helper function to broadcast an update signal globally

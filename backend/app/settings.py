@@ -31,6 +31,9 @@ SECRET_KEY = os.environ.get("SECRET_KEY", "my-pivot-dev-secret-change-in-product
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 24 * 7  # 7日間
 
+# Googleログイン(Firebase Authentication)。IDトークンの発行元検証に使う
+FIREBASE_PROJECT_ID = os.environ.get("FIREBASE_PROJECT_ID", "my-pivot-5ff68")
+
 # --- 記録の不変性 ---
 FIX_WINDOW_SECONDS = 120          # 綴じた後、修正(削除→書き直し)が許される秒数
 PENDING_DEFAULT_MONTHS = 6        # 「日付は未定」のときの結果予定日

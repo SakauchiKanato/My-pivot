@@ -1,21 +1,25 @@
 """
 認証API
 
-- POST /api/auth/register  新規登録
+- POST /api/auth/register  新規登録(メール+パスワード。UIからは非表示・API自体は維持)
 - POST /api/auth/login     ログイン → JWT
 - GET  /api/auth/me        プロフィール
-- GET  /api/auth/google/login  Google OAuth(未実装: 501)
+- POST /api/auth/google    Googleログイン(Firebase AuthenticationのIDトークンを検証)
 """
 from fastapi import APIRouter, Depends, HTTPException, status
+from google.auth.transport import requests as google_requests
+from google.oauth2 import id_token as google_id_token
 from pydantic import BaseModel
 from sqlmodel import Session, select
 
+from app import settings
 from app.database import get_session
 from app.models import User
 from app.auth.jwt_provider import hash_password, verify_password
 from app.auth.deps import get_current_user, get_provider
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
+_google_request = google_requests.Request()
 
 
 class RegisterRequest(BaseModel):
@@ -40,6 +44,19 @@ class UserResponse(BaseModel):
     id: int
     username: str
     email: str
+
+
+class GoogleLoginRequest(BaseModel):
+    id_token: str
+
+
+def _unique_username(base: str, session: Session) -> str:
+    candidate = base or "user"
+    n = 0
+    while session.exec(select(User).where(User.username == candidate)).first():
+        n += 1
+        candidate = f"{base}{n}"
+    return candidate
 
 
 @router.post("/register", response_model=TokenResponse, status_code=status.HTTP_201_CREATED)
@@ -79,10 +96,33 @@ def me(current_user: User = Depends(get_current_user)):
     )
 
 
-@router.get("/google/login")
-def google_login():
-    """Google OAuth への入口。auth/google_provider.py の手順で実装後に有効化。"""
-    raise HTTPException(
-        status_code=501,
-        detail="Google ログインは未実装です。app/auth/google_provider.py の手順を参照。",
-    )
+@router.post("/google", response_model=TokenResponse)
+def google_login(data: GoogleLoginRequest, session: Session = Depends(get_session)):
+    """Firebase Authentication(Googleサインイン)で取得したIDトークンを検証し、
+    対応するユーザーを取得または新規作成して自前JWTを発行する。"""
+    try:
+        claims = google_id_token.verify_firebase_token(
+            data.id_token, _google_request, audience=settings.FIREBASE_PROJECT_ID
+        )
+    except ValueError:
+        raise HTTPException(401, "Googleトークンが無効です")
+
+    email = claims.get("email")
+    if not email:
+        raise HTTPException(401, "Googleアカウントのメールアドレスを取得できませんでした")
+
+    user = session.exec(select(User).where(User.email == email)).first()
+    if user is None:
+        base_username = (claims.get("name") or email.split("@")[0]).replace(" ", "_")
+        user = User(
+            username=_unique_username(base_username, session),
+            email=email,
+            hashed_password="",
+            auth_provider="google",
+        )
+        session.add(user)
+        session.commit()
+        session.refresh(user)
+
+    token = get_provider().create_token(user)
+    return TokenResponse(access_token=token, username=user.username, user_id=user.id)
