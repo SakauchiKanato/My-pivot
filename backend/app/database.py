@@ -30,8 +30,24 @@ if DATABASE_URL.startswith("sqlite"):
 
 
 def create_db_and_tables():
+    ensure_postgres_extensions()
     SQLModel.metadata.create_all(engine)
     repair_postgres_sequences()
+
+
+def ensure_postgres_extensions():
+    """検索用GINインデックス(gin_trgm_ops)が必要とするpg_trgm拡張機能を有効化する(冪等)。"""
+    if not DATABASE_URL.startswith("postgresql"):
+        return
+    from sqlalchemy import text
+
+    try:
+        with engine.begin() as conn:
+            conn.execute(text("CREATE EXTENSION IF NOT EXISTS pg_trgm;"))
+        print("[db] pg_trgm 拡張機能を確認しました")
+    except Exception as e:
+        # 有効化失敗でも起動は止めない(GINインデックス作成側でエラーになるので原因は分かる)
+        print(f"[db] pg_trgm 拡張機能の有効化に失敗: {e}")
 
 
 def repair_postgres_sequences():
