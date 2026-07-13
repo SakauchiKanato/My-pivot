@@ -102,6 +102,8 @@ export const apiRegister = (username: string, email: string, password: string) =
   post<TokenResponse>("/api/auth/register", { username, email, password });
 export const apiLogin = (email: string, password: string) =>
   post<TokenResponse>("/api/auth/login", { email, password });
+export const apiGoogleLogin = (idToken: string) =>
+  post<TokenResponse>("/api/auth/google", { id_token: idToken });
 
 //  書庫
 export const fetchLibrary = () => req<Library>("/api/library");
